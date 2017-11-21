@@ -10,49 +10,49 @@ int main(void) {
   log->SetLogName("Main");
   log->SetLogLevel(info);
 
-  std::thread tx([]() {
+  auto checksumType = DataLinkFrame::fcsType::crc16;
+  Ptr<IPacketBuilder> pb =
+      CreateObject<DataLinkFramePacketBuilder>(checksumType);
+
+  Ptr<CommsDeviceService> node1 = CreateObject<CommsDeviceService>(pb);
+  node1->SetLogLevel(info);
+  node1->SetCommsDeviceId("node1");
+  node1->Start();
+
+  Ptr<CommsDeviceService> node0 = CreateObject<CommsDeviceService>(pb);
+  node0->SetLogLevel(info);
+  node0->SetCommsDeviceId("node0");
+  node0->Start();
+
+  std::thread tx([node0, pb]() {
     Ptr<Logger> log = CreateObject<Logger>();
     log->SetLogName("node0");
     log->SetLogLevel(info);
-    auto checksumType = DataLinkFrame::fcsType::crc16;
-    Ptr<IPacketBuilder> pb =
-        CreateObject<DataLinkFramePacketBuilder>(checksumType);
-    Ptr<CommsDeviceService> comms = CreateObject<CommsDeviceService>(pb);
-    comms->SetLogLevel(info);
-    comms->SetCommsDeviceId("node0");
-    comms->Start();
-    Ptr<DataLinkFrame> dlf = CreateObject<DataLinkFrame>(checksumType);
     string msg = "Hello! I'm node0!";
-    uint8_t *seqPtr = dlf->GetPayloadBuffer();
+    auto txPacket = pb->Create();
+    uint8_t *seqPtr = txPacket->GetPayloadBuffer();
     uint8_t *asciiMsg = seqPtr + 1;
     uint8_t seq = 0;
     while (true) {
       *seqPtr = seq;
       memcpy(asciiMsg, msg.c_str(), msg.size());
-      dlf->PayloadUpdated(msg.size() + 1);
-      comms->WaitForDeviceReadyToTransmit();
+      txPacket->PayloadUpdated(msg.size() + 1);
+      node0->WaitForDeviceReadyToTransmit();
       log->Info("Transmitting packet (Seq. Num: {})", seq);
       seq++;
-      comms << dlf;
+      node0 << txPacket;
     }
 
   });
 
-  std::thread rx([]() {
+  std::thread rx([node1, pb]() {
     Ptr<Logger> log = CreateObject<Logger>();
     log->SetLogName("node1");
     log->SetLogLevel(info);
-    auto checksumType = DataLinkFrame::fcsType::crc16;
-    Ptr<IPacketBuilder> pb =
-        CreateObject<DataLinkFramePacketBuilder>(checksumType);
-    Ptr<CommsDeviceService> comms = CreateObject<CommsDeviceService>(pb);
-    comms->SetLogLevel(info);
-    comms->SetCommsDeviceId("node1");
-    comms->Start();
-    Ptr<DataLinkFrame> dlf = CreateObject<DataLinkFrame>(checksumType);
+    PacketPtr dlf = pb->Create();
     char msg[100];
     while (true) {
-      comms >> dlf;
+      node1 >> dlf;
       if (dlf->PacketIsOk()) {
         uint8_t *seqPtr = dlf->GetPayloadBuffer();
         uint8_t *asciiMsg = seqPtr + 1;
