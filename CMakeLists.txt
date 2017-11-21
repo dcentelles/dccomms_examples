@@ -135,8 +135,11 @@ include_directories(
 #target_link_libraries(${PROJECT_NAME} ${LIB2_GIT})
 #target_include_directories(${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}_INCLUDE_DIRS})
 
-add_executable (main ${SRCPATH}main/main.cpp)
-target_link_libraries(main ${DCCOMMS_GIT})
+add_executable (example1 ${SRCPATH}main/example1.cpp)
+target_link_libraries(example1 ${DCCOMMS_GIT})
+
+add_executable (example2 ${SRCPATH}main/example2.cpp)
+target_link_libraries(example2 ${DCCOMMS_GIT})
 
 
 #install(TARGETS ${PROJECT_NAME} main
