@@ -141,6 +141,8 @@ target_link_libraries(example1 ${DCCOMMS_GIT})
 add_executable (example2 ${SRCPATH}main/example2.cpp)
 target_link_libraries(example2 ${DCCOMMS_GIT} cxxopts)
 
+add_executable (example3 ${SRCPATH}main/example3.cpp)
+target_link_libraries(example3 ${DCCOMMS_GIT} cxxopts)
 
 #install(TARGETS ${PROJECT_NAME} main
 #        LIBRARY DESTINATION "lib"
