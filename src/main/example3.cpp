@@ -12,22 +12,21 @@ using namespace std;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr, txName, rxName;
-  bool disableTx, disableRx;
+  bool enableTx = false, enableRx = false;
   uint32_t dataRate = 200, packetSize = 20, nPackets = 50;
   try {
     cxxopts::Options options("dccomms_examples/example2",
                              " - command line options");
 
-    options.add_options()(
-        "num-packets", "number of packets to transmit",
-        cxxopts::value<uint32_t>(nPackets)) //->default_value (200))
-        ("data-rate", "application data rate in bps (a high value could "
-                      "saturate the output buffer",
-         cxxopts::value<uint32_t>(dataRate)) //->default_value (200))
-        ("packet-size", "packet size in bytes",
-         cxxopts::value<uint32_t>(packetSize)) //->default_value(20))
-        ("disable-tx", "only rx node", cxxopts::value<bool>(disableTx))(
-            "disable-rx", "only tx node", cxxopts::value<bool>(disableRx))(
+    options.add_options()("num-packets", "number of packets to transmit",
+                          cxxopts::value<uint32_t>(nPackets))(
+        "data-rate", "application data rate in bps (a high value could "
+                     "saturate the output buffer",
+        cxxopts::value<uint32_t>(dataRate))(
+        "packet-size", "packet size in bytes",
+        cxxopts::value<uint32_t>(packetSize)) //->default_value(20))
+        ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))(
+            "enable-rx", "enable rx node", cxxopts::value<bool>(enableRx))(
             "f,log-file", "File to save the log",
             cxxopts::value<std::string>(logFile)
                 ->default_value("")
@@ -52,20 +51,11 @@ int main(int argc, char **argv) {
 
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
   Ptr<Logger> log = CreateObject<Logger>();
-  Ptr<Logger> txLog = CreateObject<Logger>();
-  Ptr<Logger> rxLog = CreateObject<Logger>();
-
+  log->FlushLogOn(info);
   if (logFile != "") {
     log->LogToFile(logFile);
-    rxLog->LogToFile(logFile + "_" + rxName);
-    txLog->LogToFile(logFile + "_" + rxName);
   }
-
   log->SetLogName("Main");
-  txLog->SetLogName(txName);
-  rxLog->SetLogName(rxName);
-  rxLog->SetLogLevel(logLevel);
-  txLog->SetLogLevel(logLevel);
   log->SetLogLevel(logLevel);
 
   auto checksumType = DataLinkFrame::fcsType::crc16;
@@ -74,8 +64,15 @@ int main(int argc, char **argv) {
 
   std::thread tx, rx;
 
-  Ptr<CommsDeviceService> txnode = CreateObject<CommsDeviceService>(pb);
-  if (!disableTx) {
+  if (enableTx) {
+    Ptr<CommsDeviceService> txnode = CreateObject<CommsDeviceService>(pb);
+    Ptr<Logger> txLog = CreateObject<Logger>();
+    if (logFile != "") {
+      txLog->LogToFile(logFile + "_" + txName);
+    }
+    txLog->FlushLogOn(info);
+    txLog->SetLogName(txName);
+    txLog->SetLogLevel(logLevel);
     txnode->SetLogLevel(info);
     txnode->SetCommsDeviceId(txName);
     txnode->Start();
@@ -111,8 +108,15 @@ int main(int argc, char **argv) {
     });
   }
 
-  Ptr<CommsDeviceService> rxnode = CreateObject<CommsDeviceService>(pb);
-  if (!disableRx) {
+  if (enableRx) {
+    Ptr<CommsDeviceService> rxnode = CreateObject<CommsDeviceService>(pb);
+    Ptr<Logger> rxLog = CreateObject<Logger>();
+    if (logFile != "") {
+      rxLog->LogToFile(logFile + "_" + rxName);
+    }
+    rxLog->FlushLogOn(info);
+    rxLog->SetLogName(rxName);
+    rxLog->SetLogLevel(logLevel);
     rxnode->SetLogLevel(info);
     rxnode->SetCommsDeviceId(rxName);
     rxnode->Start();
@@ -129,9 +133,9 @@ int main(int argc, char **argv) {
       }
     });
   }
-  if(!disableTx)
+  if (enableTx)
     tx.join();
-  if(!disableRx)
+  if (enableRx)
     rx.join();
 
   exit(0);
