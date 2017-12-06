@@ -4,7 +4,7 @@
 #include <iostream>
 
 /*
- * This is an util to gather sta
+ * This is a tool to study the communication link capabilities
  */
 
 using namespace dccomms;
@@ -15,32 +15,25 @@ int main(int argc, char **argv) {
   bool enableTx = false, enableRx = false;
   uint32_t dataRate = 200, packetSize = 20, nPackets = 50;
   try {
-    cxxopts::Options options("dccomms_examples/example2",
+    cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
+    options.add_options()
+     ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
+     ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
+     ("help", "Print help");
+    options.add_options("Transmitter")
+     ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))
+     ("num-packets", "number of packets to transmit",cxxopts::value<uint32_t>(nPackets))
+     ("packet-size", "packet size in bytes",cxxopts::value<uint32_t>(packetSize))
+     ("data-rate", "application data rate in bps (a high value could saturate the output buffer",cxxopts::value<uint32_t>(dataRate))
+     ("tx-name", "dccomms id for the tx node", cxxopts::value<std::string>(txName)->default_value("txNode"));
+    options.add_options("Receiver")
+     ("enable-rx", "enable rx node", cxxopts::value<bool>(enableRx))
+     ("rx-name", "dccomms id for the rx node", cxxopts::value<std::string>(rxName)->default_value("rxNode"));
 
-    options.add_options()("num-packets", "number of packets to transmit",
-                          cxxopts::value<uint32_t>(nPackets))(
-        "data-rate", "application data rate in bps (a high value could "
-                     "saturate the output buffer",
-        cxxopts::value<uint32_t>(dataRate))(
-        "packet-size", "packet size in bytes",
-        cxxopts::value<uint32_t>(packetSize)) //->default_value(20))
-        ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))(
-            "enable-rx", "enable rx node", cxxopts::value<bool>(enableRx))(
-            "f,log-file", "File to save the log",
-            cxxopts::value<std::string>(logFile)
-                ->default_value("")
-                ->implicit_value("example2_log"))(
-            "l,log-level", "log level: critical,debug,err,info,off,trace,warn",
-            cxxopts::value<std::string>(logLevelStr)->default_value("info"))(
-            "tx-name", "dccomms id for the tx node",
-            cxxopts::value<std::string>(txName)->default_value("txNode"))(
-            "rx-name", "dccomms id for the rx node",
-            cxxopts::value<std::string>(rxName)->default_value("rxNode"))(
-            "help", "Print help");
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
-      std::cout << options.help({""}) << std::endl;
+      std::cout << options.help({"", "Receiver", "Transmitter"}) << std::endl;
       exit(0);
     }
 
