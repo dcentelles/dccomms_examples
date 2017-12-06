@@ -88,10 +88,10 @@ int main(int argc, char **argv) {
       for (uint8_t *pptr = asciiMsg; pptr < maxPtr; pptr++) {
         *pptr = digit++;
       }
-      auto pktSize = txPacket->GetPacketSize();
       for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
         *seqPtr = npacket;
         txPacket->PayloadUpdated(msgSize + 2);
+        auto pktSize = txPacket->GetPacketSize();
         auto micros = (uint32_t)round(pktSize * microsPerByte);
         txLog->Info("Transmitting packet (Seq. Num: {} ; Size: {} ; ETA: {})",
                     npacket, pktSize, micros);
