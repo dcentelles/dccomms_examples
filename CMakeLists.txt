@@ -121,6 +121,7 @@ add_definitions(-fPIC -std=c++11)
 SET(SRCPATH src/)
 SET(${PROJECT_NAME}_INCLUDE_DIRS
     ${SRCPATH}/include
+    ${${DCCOMMS_PACKETS_GIT}_INCLUDE_DIRS}
 )
 
 include_directories(
@@ -136,13 +137,16 @@ include_directories(
 #target_include_directories(${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}_INCLUDE_DIRS})
 
 add_executable (example1 ${SRCPATH}main/example1.cpp)
-target_link_libraries(example1 ${DCCOMMS_GIT})
+target_link_libraries(example1 ${DCCOMMS_PACKETS_GIT})
 
 add_executable (example2 ${SRCPATH}main/example2.cpp)
-target_link_libraries(example2 ${DCCOMMS_GIT} cxxopts)
+target_link_libraries(example2 ${DCCOMMS_PACKETS_GIT} cxxopts)
 
 add_executable (example3 ${SRCPATH}main/example3.cpp)
-target_link_libraries(example3 ${DCCOMMS_GIT} cxxopts)
+target_link_libraries(example3 ${DCCOMMS_PACKETS_GIT} cxxopts)
+
+add_executable (example4 ${SRCPATH}main/example4.cpp)
+target_link_libraries(example4 ${DCCOMMS_PACKETS_GIT} cxxopts)
 
 #install(TARGETS ${PROJECT_NAME} main
 #        LIBRARY DESTINATION "lib"
