@@ -13,23 +13,33 @@ using namespace std;
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr, txName, rxName;
   bool enableTx = false, enableRx = false;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 50;
+  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, txmac = 0;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
-    options.add_options()
-     ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
-     ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
-     ("help", "Print help");
-    options.add_options("Transmitter")
-     ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))
-     ("num-packets", "number of packets to transmit",cxxopts::value<uint32_t>(nPackets))
-     ("packet-size", "packet size in bytes",cxxopts::value<uint32_t>(packetSize))
-     ("data-rate", "application data rate in bps (a high value could saturate the output buffer",cxxopts::value<uint32_t>(dataRate))
-     ("tx-name", "dccomms id for the tx node", cxxopts::value<std::string>(txName)->default_value("txNode"));
-    options.add_options("Receiver")
-     ("enable-rx", "enable rx node", cxxopts::value<bool>(enableRx))
-     ("rx-name", "dccomms id for the rx node", cxxopts::value<std::string>(rxName)->default_value("rxNode"));
+    options.add_options()(
+        "f,log-file", "File to save the log",
+        cxxopts::value<std::string>(logFile)->default_value("")->implicit_value(
+            "example2_log"))(
+        "l,log-level", "log level: critical,debug,err,info,off,trace,warn",
+        cxxopts::value<std::string>(logLevelStr)->default_value("info"))(
+        "help", "Print help");
+    options.add_options("Transmitter")("txmac", "MAC address",
+                                       cxxopts::value<uint32_t>(txmac))(
+        "enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))(
+        "num-packets", "number of packets to transmit",
+        cxxopts::value<uint32_t>(nPackets))(
+        "packet-size", "packet size in bytes",
+        cxxopts::value<uint32_t>(packetSize))(
+        "data-rate", "application data rate in bps (a high value could "
+                     "saturate the output buffer",
+        cxxopts::value<uint32_t>(dataRate))(
+        "tx-name", "dccomms id for the tx node",
+        cxxopts::value<std::string>(txName)->default_value("txNode"));
+    options.add_options("Receiver")("enable-rx", "enable rx node",
+                                    cxxopts::value<bool>(enableRx))(
+        "rx-name", "dccomms id for the rx node",
+        cxxopts::value<std::string>(rxName)->default_value("rxNode"));
 
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -52,7 +62,7 @@ int main(int argc, char **argv) {
   log->SetLogLevel(logLevel);
 
   auto checksumType = DataLinkFrame::fcsType::crc16;
-  Ptr<IPacketBuilder> pb =
+  Ptr<DataLinkFramePacketBuilder> pb =
       CreateObject<DataLinkFramePacketBuilder>(checksumType);
 
   std::thread tx, rx;
@@ -76,8 +86,9 @@ int main(int argc, char **argv) {
               "bytes/second = {}\nmicros/byte = {}",
               dataRate, packetSize, nPackets, bytesPerSecond, microsPerByte);
     tx = std::thread([txnode, pb, txName, txLog, nPackets, packetSize,
-                      microsPerByte]() {
+                      microsPerByte, txmac]() {
       auto txPacket = pb->Create();
+      std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDesDir(txmac);
       uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
       uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
       txPacket->PayloadUpdated(0);
