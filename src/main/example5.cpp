@@ -12,9 +12,9 @@ using namespace dccomms;
 using namespace std;
 
 int main(int argc, char **argv) {
-  std::string logFile, logLevelStr, txName, rxName;
+  std::string logFile, logLevelStr, txName = "tx", rxName = "rx";
   bool enableTx = true, enableRx = true;
-  uint32_t dataRate = 200, payloadSize = 5;
+  uint32_t dataRate = 20, payloadSize = 5;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
         ("enable-tx", "enable tx node",cxxopts::value<bool>(enableTx))
         ("data-rate", "application data rate in bps (a high value could ""saturate the output buffer",cxxopts::value<uint32_t>(dataRate))
         ("tx-name", "dccomms id for the tx node",cxxopts::value<std::string>(txName)->default_value("txNode"))
-        ("packet-size", "packet size in bytes", cxxopts::value<uint32_t>(payloadSize));
+        ("payload-size", "payload size in bytes", cxxopts::value<uint32_t>(payloadSize));
 
     options.add_options("Receiver")
         ("enable-rx", "enable rx node",cxxopts::value<bool>(enableRx))
@@ -77,19 +77,19 @@ int main(int argc, char **argv) {
 
   if (enableTx) {
 
-    tx = std::thread([pb, nanosPerByte, logLevel]() {
+    tx = std::thread([pb, nanosPerByte, logLevel, txName]() {
       Ptr<Logger> log = CreateObject<Logger>();
       log->FlushLogOn(info);
       log->SetLogName("Tx");
       log->SetLogLevel(logLevel);
 
       CommsDeviceServicePtr service(new CommsDeviceService(pb));
-      service->SetCommsDeviceId("buoy1_s2cr");
+      service->SetCommsDeviceId(txName);
       service->Start();
 
       CommsDeviceSocketPtr dev(new CommsDeviceSocket(2));
       dev->SetPacketBuilder(pb);
-      dev->SetCommsDevice(service);
+      dev->SetStreamCommsDevice(service);
       dev->SetDestAddr(1);
       dev->SetPayloadSize(5);
 
@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
         msg[msg.size()-1] = ' ';
         msg += "(using Send(...) method)\n";
         log->Debug("Test 1 begin");
-        dev->Send(msg.c_str(), msg.length(), 1);
+        dev->Send(msg.c_str(), msg.length());
         log->Debug("Test 1 end");
 
         nanos = (uint32_t)round(msg.length() * nanosPerByte);
@@ -123,14 +123,14 @@ int main(int argc, char **argv) {
   }
 
   if (enableRx) {
-      rx = std::thread([pb, nanosPerByte]() {
+      rx = std::thread([pb, nanosPerByte, rxName]() {
         CommsDeviceServicePtr service(new CommsDeviceService(pb));
-        service->SetCommsDeviceId("bluerov2_s2cr");
+        service->SetCommsDeviceId(rxName);
         service->Start();
 
         CommsDeviceSocketPtr dev(new CommsDeviceSocket(1));
         dev->SetPacketBuilder(pb);
-        dev->SetCommsDevice(service);
+        dev->SetStreamCommsDevice(service);
         dev->SetDestAddr(2);
 
         char byte;
