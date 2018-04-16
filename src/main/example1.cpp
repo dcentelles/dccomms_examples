@@ -16,7 +16,7 @@ using namespace std;
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName, rxName;
   bool enableTx = false, enableRx = false;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, txmac = 0;
+  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, txmac = 1, rxmac = 2;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ("help", "Print help");
     options.add_options("Transmitter")
-        ("txmac", "MAC address",cxxopts::value<uint32_t>(txmac))
+        ("tx-mac", "MAC address",cxxopts::value<uint32_t>(txmac))
         ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))
         ("num-packets", "number of packets to transmit",cxxopts::value<uint32_t>(nPackets))
         ("packet-size", "packet size in bytes",cxxopts::value<uint32_t>(packetSize))
@@ -34,6 +34,7 @@ int main(int argc, char **argv) {
         ("tx-name", "dccomms id for the tx node",cxxopts::value<std::string>(txName)->default_value("txNode"));
     options.add_options("Receiver")
         ("enable-rx", "enable rx node",cxxopts::value<bool>(enableRx))
+        ("rx-mac", "rx MAC address",cxxopts::value<uint32_t>(rxmac))
         ("rx-name", "dccomms id for the rx node",cxxopts::value<std::string>(rxName)->default_value("rxNode"));
 
     auto result = options.parse(argc, argv);

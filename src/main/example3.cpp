@@ -15,8 +15,8 @@ using namespace std;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName = "tx", rxName = "rx";
-  bool enableTx = true, enableRx = true;
-  uint32_t dataRate = 20, payloadSize = 5;
+  bool enableTx = false, enableRx = false;
+  uint32_t dataRate = 20, payloadSize = 5, txmac = 2, rxmac = 1;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
@@ -29,11 +29,13 @@ int main(int argc, char **argv) {
     options.add_options("Transmitter")
         ("enable-tx", "enable tx node",cxxopts::value<bool>(enableTx))
         ("data-rate", "application data rate in bps (a high value could ""saturate the output buffer",cxxopts::value<uint32_t>(dataRate))
+        ("tx-mac", "tx mac address",cxxopts::value<uint32_t>(txmac))
         ("tx-name", "dccomms id for the tx node",cxxopts::value<std::string>(txName)->default_value("txNode"))
         ("payload-size", "payload size in bytes", cxxopts::value<uint32_t>(payloadSize));
 
     options.add_options("Receiver")
         ("enable-rx", "enable rx node",cxxopts::value<bool>(enableRx))
+        ("rx-mac", "rx mac address",cxxopts::value<uint32_t>(rxmac))
         ("rx-name", "dccomms id for the rx node",cxxopts::value<std::string>(rxName)->default_value("rxNode"));
 
     auto result = options.parse(argc, argv);
@@ -55,6 +57,7 @@ int main(int argc, char **argv) {
 
   double bytesPerSecond = dataRate / 8.;
   double nanosPerByte = 1000000000 / bytesPerSecond;
+  log->Debug("{} bytes/second ; {} ns/byte", bytesPerSecond, nanosPerByte);
   PacketBuilderPtr pb = CreateObject<DataLinkFrameBuilderCRC16>();
 
 
@@ -79,7 +82,7 @@ int main(int argc, char **argv) {
 
   if (enableTx) {
 
-    tx = std::thread([pb, nanosPerByte, logLevel, txName]() {
+    tx = std::thread([pb, nanosPerByte, logLevel, txName, txmac, payloadSize]() {
       Ptr<Logger> log = CreateObject<Logger>();
       log->FlushLogOn(info);
       log->SetLogName("Tx");
@@ -89,21 +92,23 @@ int main(int argc, char **argv) {
       service->SetCommsDeviceId(txName);
       service->Start();
 
-      CommsDeviceSocketPtr dev(new CommsDeviceSocket(2));
+      CommsDeviceSocketPtr dev(new CommsDeviceSocket(txmac));
       dev->SetPacketBuilder(pb);
       dev->SetStreamCommsDevice(service);
       dev->SetDestAddr(1);
-      dev->SetPayloadSize(5);
+      dev->SetPayloadSize(payloadSize);
 
-      uint32_t nanos;
+      uint64_t nanos;
       while (1) {
         std::string msg = "c++ Hello World!\n";
         log->Debug("Test 0 begin");
         dev << msg;
         log->Debug("Test 0 end");
 
-        nanos = (uint32_t)round(msg.length() * nanosPerByte);
+        nanos = (uint64_t)round(msg.length() * nanosPerByte);
+        log->Debug("{} ns/byte ; {} bytes ; waiting for {} nanos ; {} seconds", nanosPerByte, msg.length(), nanos, nanos/(double)1e9);
         std::this_thread::sleep_for(chrono::nanoseconds(nanos));
+
 
         msg[msg.size()-1] = ' ';
         msg += "(using Send(...) method)\n";
@@ -111,26 +116,28 @@ int main(int argc, char **argv) {
         dev->Send(msg.c_str(), msg.length());
         log->Debug("Test 1 end");
 
-        nanos = (uint32_t)round(msg.length() * nanosPerByte);
+        nanos = (uint64_t)round(msg.length() * nanosPerByte);
+        log->Debug("{} ns/byte ; {} bytes ; waiting for {} nanos ; {} seconds", nanosPerByte, msg.length(), nanos, nanos/(double)1e9);
         std::this_thread::sleep_for(chrono::nanoseconds(nanos));
 
         log->Debug("Test 2 begin");
         dev << "c Hello World!\n";
         log->Debug("Test 2 end");
 
-        nanos = (uint32_t)round(msg.length() * nanosPerByte);
+        nanos = (uint64_t)round(msg.length() * nanosPerByte);
+        log->Debug("{} ns/byte ; {} bytes ; waiting for {} nanos ; {} seconds", nanosPerByte, msg.length(), nanos, nanos/(double)1e9);
         std::this_thread::sleep_for(chrono::nanoseconds(nanos));
       }
     });
   }
 
   if (enableRx) {
-      rx = std::thread([pb, nanosPerByte, rxName]() {
+      rx = std::thread([pb, nanosPerByte, rxName, rxmac]() {
         CommsDeviceServicePtr service(new CommsDeviceService(pb));
         service->SetCommsDeviceId(rxName);
         service->Start();
 
-        CommsDeviceSocketPtr dev(new CommsDeviceSocket(1));
+        CommsDeviceSocketPtr dev(new CommsDeviceSocket(rxmac));
         dev->SetPacketBuilder(pb);
         dev->SetStreamCommsDevice(service);
         dev->SetDestAddr(2);
