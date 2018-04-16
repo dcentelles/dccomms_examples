@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
         ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ( "help", "Print help")
-        ("packet-size", "packet size in bytes", cxxopts::value<uint32_t>(packetSize));
+        ("packet-size", "packet size in bytes (payload size = packet size - 3)", cxxopts::value<uint32_t>(packetSize));
     options.add_options("Transmitter")
         ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))
         ("num-packets", "number of packets to transmit", cxxopts::value<uint32_t>(nPackets))
