@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
   log->SetLogLevel(logLevel);
   log->FlushLogOn(info);
   log->SetLogName(nodeName);
+  log->LogToConsole(false);
 
   node->SetLogLevel(info);
   node->Start();
@@ -86,7 +87,7 @@ int main(int argc, char **argv) {
     while (1) {
       uint32_t bytesInBuffer = 0;
       while (bytesInBuffer < payloadSize) {
-        //http://man7.org/linux/man-pages/man2/read.2.html
+        // http://man7.org/linux/man-pages/man2/read.2.html
         int n = read(0, data + bytesInBuffer, 1);
         bytesInBuffer += n;
         if (n == 0) {
