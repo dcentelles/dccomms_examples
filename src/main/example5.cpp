@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
   log->SetLogName(nodeName);
   log->LogToConsole(false);
 
-  node->SetLogLevel(info);
+  node->SetLogLevel(warn);
   node->Start();
 
   std::thread tx, rx;
