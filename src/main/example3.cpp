@@ -56,11 +56,11 @@ int main(int argc, char **argv) {
   log->SetLogLevel(logLevel);
 
   double bytesPerSecond = dataRate / 8.;
-  double nanosPerByte = 1000000000 / bytesPerSecond;
+  double nanosPerByte = 1e9 / bytesPerSecond;
   log->Debug("{} bytes/second ; {} ns/byte", bytesPerSecond, nanosPerByte);
   PacketBuilderPtr pb = CreateObject<DataLinkFrameBuilderCRC16>();
 
-
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
 
   if(enableTx){
       //Compute and show the packet size for a packet with a payload size of 'payloadSize' bytes
@@ -82,11 +82,12 @@ int main(int argc, char **argv) {
 
   if (enableTx) {
 
-    tx = std::thread([pb, nanosPerByte, logLevel, txName, txmac, payloadSize]() {
+    tx = std::thread([pb, nanosPerByte, logLevel, txName, txmac, payloadSize, logFormatter]() {
       Ptr<Logger> log = CreateObject<Logger>();
       log->FlushLogOn(info);
       log->SetLogName("Tx");
       log->SetLogLevel(logLevel);
+      log->SetLogFormatter(logFormatter);
 
       CommsDeviceServicePtr service(new CommsDeviceService(pb));
       service->SetCommsDeviceId(txName);

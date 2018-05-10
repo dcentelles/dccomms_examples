@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
   Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(pb);
   node->SetCommsDeviceId(nodeName);
 
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
   Ptr<Logger> log = CreateObject<Logger>();
   if (logFile != "") {
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
   log->FlushLogOn(info);
   log->SetLogName(nodeName);
   log->LogToConsole(false);
+  log->SetLogFormatter(logFormatter);
 
   node->SetLogLevel(warn);
   node->Start();
@@ -76,12 +78,12 @@ int main(int argc, char **argv) {
     txPacket->PayloadUpdated(payloadSize);
 
     double bytesPerSecond = dataRate / 8.;
-    double microsPerByte = 1000000 / bytesPerSecond;
+    double nanosPerByte = 1e9 / bytesPerSecond;
     log->Info("data rate (bps) = {} ; payload size = {} ; total size (payload "
               "+ overhead): {} ; "
               "bytes/second = {}\nmicros/byte = {}",
               dataRate, payloadSize, txPacket->GetPacketSize(), bytesPerSecond,
-              microsPerByte);
+              nanosPerByte);
 
     uint8_t *data = new uint8_t[payloadSize];
     while (1) {
@@ -98,10 +100,10 @@ int main(int argc, char **argv) {
       txPacket->SetPayload(data, bytesInBuffer);
       bytesInBuffer = 0;
       auto pktSize = txPacket->GetPacketSize();
-      auto micros = (uint32_t)round(pktSize * microsPerByte);
-      log->Info("Transmitting packet (Size: {} ; ETA: {})", pktSize, micros);
+      auto nanos = (uint32_t)round(pktSize * nanosPerByte);
+      log->Info("TX ; SIZE: {}", pktSize);
       node << txPacket;
-      std::this_thread::sleep_for(chrono::microseconds(micros));
+      std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
   });
 

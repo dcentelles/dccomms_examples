@@ -18,7 +18,7 @@ using namespace std;
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName, rxName;
   bool enableTx = false, enableRx = false;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 50;
+  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, packetSizeOffset = 0;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
@@ -26,7 +26,8 @@ int main(int argc, char **argv) {
         ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ( "help", "Print help")
-        ("packet-size", "packet size in bytes (payload size = packet size - 3)", cxxopts::value<uint32_t>(packetSize));
+        ("packet-size", "packet size in bytes (payload size = packet size - 3)", cxxopts::value<uint32_t>(packetSize))
+        ("packet-size-offset", "packet size offset (default = 0)", cxxopts::value<uint32_t>(packetSizeOffset));
     options.add_options("Transmitter")
         ("enable-tx", "enable tx node", cxxopts::value<bool>(enableTx))
         ("num-packets", "number of packets to transmit", cxxopts::value<uint32_t>(nPackets))
@@ -50,12 +51,12 @@ int main(int argc, char **argv) {
 
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
   Ptr<Logger> log = CreateObject<Logger>();
-  log->FlushLogOn(info);
   if (logFile != "") {
     log->LogToFile(logFile);
   }
   log->SetLogName("Main");
   log->SetLogLevel(logLevel);
+  log->FlushLogOn(info);
 
   PacketBuilderPtr pb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
   auto emptyPacket = pb->Create();
@@ -63,7 +64,8 @@ int main(int argc, char **argv) {
   auto payloadSize = packetSize - emptyPacketSize;
   pb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
   std::thread tx, rx;
-
+  uint32_t totalPacketSize = packetSize + packetSizeOffset;
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
   if (enableTx) {
     Ptr<CommsDeviceService> txnode = CreateObject<CommsDeviceService>(pb);
     Ptr<Logger> txLog = CreateObject<Logger>();
@@ -73,17 +75,18 @@ int main(int argc, char **argv) {
     txLog->FlushLogOn(info);
     txLog->SetLogName(txName);
     txLog->SetLogLevel(logLevel);
+    txLog->SetLogFormatter(logFormatter);
     txnode->SetLogLevel(info);
     txnode->SetCommsDeviceId(txName);
     txnode->Start();
 
     double bytesPerSecond = dataRate / 8.;
-    double microsPerByte = 1000000 / bytesPerSecond;
-    log->Info("data rate (bps) = {} ; packet size = {} ; num. packets = {} ; "
+    uint64_t nanosPerByte = 1e9 / bytesPerSecond;
+    log->Info("data rate (bps) = {} ; packet size = {} (+offset = {}); num. packets = {} ; "
               "bytes/second = {}\nmicros/byte = {}",
-              dataRate, packetSize, nPackets, bytesPerSecond, microsPerByte);
-    tx = std::thread([txnode, pb, txName, txLog, nPackets, microsPerByte,
-                      payloadSize]() {
+              dataRate, packetSize, totalPacketSize, nPackets, bytesPerSecond, nanosPerByte);
+    tx = std::thread([txnode, pb, txName, txLog, nPackets, nanosPerByte,
+                      payloadSize, totalPacketSize]() {
       auto txPacket = pb->Create();
       uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
       uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
@@ -95,13 +98,12 @@ int main(int argc, char **argv) {
       }
       for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
         *seqPtr = npacket;
-        txPacket->PayloadUpdated(msgSize + 2);
-        auto pktSize = txPacket->GetPacketSize();
-        auto micros = (uint32_t)round(pktSize * microsPerByte);
-        txLog->Info("Transmitting packet (Seq. Num: {} ; Size: {} ; ETA: {})",
-                    npacket, pktSize, micros);
+        txPacket->PayloadUpdated(msgSize + 2); // == packetSize
+        auto nanos = (uint64_t)round(totalPacketSize * nanosPerByte);
+        txLog->Info("TX ; SEQ: {} ; SIZE: {}",
+                    npacket, txPacket->GetPacketSize());
         txnode << txPacket;
-        std::this_thread::sleep_for(chrono::microseconds(micros));
+        std::this_thread::sleep_for(chrono::nanoseconds(nanos));
       }
     });
   }
@@ -115,19 +117,20 @@ int main(int argc, char **argv) {
     rxLog->FlushLogOn(info);
     rxLog->SetLogName(rxName);
     rxLog->SetLogLevel(logLevel);
+    rxLog->SetLogFormatter(logFormatter);
     rxnode->SetLogLevel(info);
     rxnode->SetCommsDeviceId(rxName);
     rxnode->Start();
-    rx = std::thread([rxnode, pb, rxLog]() {
+    rx = std::thread([rxnode, pb, rxLog, packetSizeOffset]() {
       PacketPtr dlf = pb->Create();
       while (true) {
         rxnode >> dlf;
         if (dlf->PacketIsOk()) {
           uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
-          rxLog->Info("Packet received!: Seq. Num: {} ; Size: {}", *seqPtr,
+          rxLog->Info("RX ; SEQ: {} ; SIZE: {}", *seqPtr,
                       dlf->GetPacketSize());
         } else
-          rxLog->Warn("Packet received with errors!");
+          rxLog->Warn("ERR");
       }
     });
   }

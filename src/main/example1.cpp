@@ -56,6 +56,8 @@ int main(int argc, char **argv) {
   }
   log->SetLogName("Main");
   log->SetLogLevel(logLevel);
+  //https://github.com/gabime/spdlog/wiki/3.-Custom-formattingges
+  //log->SetLogFormatter(std::make_shared<spdlog::pattern_formatter>("[%D %T.%F] %v"));
 
   auto checksumType = DataLinkFrame::fcsType::crc16;
   Ptr<DataLinkFramePacketBuilder> pb =
@@ -63,6 +65,7 @@ int main(int argc, char **argv) {
 
   std::thread tx, rx;
 
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
   if (enableTx) {
     Ptr<CommsDeviceService> txnode = CreateObject<CommsDeviceService>(pb);
     Ptr<Logger> txLog = CreateObject<Logger>();
@@ -72,17 +75,18 @@ int main(int argc, char **argv) {
     txLog->FlushLogOn(info);
     txLog->SetLogName(txName);
     txLog->SetLogLevel(logLevel);
+    txLog->SetLogFormatter(logFormatter);
     txnode->SetLogLevel(info);
     txnode->SetCommsDeviceId(txName);
     txnode->Start();
 
     double bytesPerSecond = dataRate / 8.;
-    double microsPerByte = 1000000 / bytesPerSecond;
+    double nanosPerByte = 1e9 / bytesPerSecond;
     log->Info("data rate (bps) = {} ; packet size = {} ; num. packets = {} ; "
               "bytes/second = {}\nmicros/byte = {}",
-              dataRate, packetSize, nPackets, bytesPerSecond, microsPerByte);
+              dataRate, packetSize, nPackets, bytesPerSecond, nanosPerByte);
     tx = std::thread([txnode, pb, txName, txLog, nPackets, packetSize,
-                      microsPerByte, txmac]() {
+                      nanosPerByte, txmac]() {
       auto txPacket = pb->Create();
       std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDesDir(txmac);
       uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
@@ -99,11 +103,11 @@ int main(int argc, char **argv) {
         *seqPtr = npacket;
         txPacket->PayloadUpdated(msgSize + 2);
         auto pktSize = txPacket->GetPacketSize();
-        auto micros = (uint32_t)round(pktSize * microsPerByte);
-        txLog->Info("Transmitting packet (Seq. Num: {} ; Size: {} ; ETA: {})",
-                    npacket, pktSize, micros);
+        auto nanos = (uint32_t)round(pktSize * nanosPerByte);
+        txLog->Info("TX ; SEQ: {} ; SIZE: {}",
+                    npacket, txPacket->GetPacketSize());
         txnode << txPacket;
-        std::this_thread::sleep_for(chrono::microseconds(micros));
+        std::this_thread::sleep_for(chrono::nanoseconds(nanos));
       }
     });
   }
@@ -117,6 +121,7 @@ int main(int argc, char **argv) {
     rxLog->FlushLogOn(info);
     rxLog->SetLogName(rxName);
     rxLog->SetLogLevel(logLevel);
+    rxLog->SetLogFormatter(logFormatter);
     rxnode->SetLogLevel(info);
     rxnode->SetCommsDeviceId(rxName);
     rxnode->Start();
@@ -126,10 +131,10 @@ int main(int argc, char **argv) {
         rxnode >> dlf;
         if (dlf->PacketIsOk()) {
           uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
-          rxLog->Info("Packet received!: Seq. Num: {} ; Size: {}", *seqPtr,
+          rxLog->Info("RX ; SEQ: {} ; SIZE: {}", *seqPtr,
                       dlf->GetPacketSize());
         } else
-          rxLog->Warn("Packet received with errors!");
+          rxLog->Warn("ERR");
       }
     });
   }

@@ -59,6 +59,7 @@ int main(int argc, char **argv) {
   Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(pb);
   node->SetCommsDeviceId(nodeName);
 
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
   Ptr<Logger> log = CreateObject<Logger>();
   if (logFile != "") {
@@ -67,6 +68,7 @@ int main(int argc, char **argv) {
   log->SetLogLevel(logLevel);
   log->FlushLogOn(info);
   log->SetLogName(nodeName);
+  log->SetLogFormatter(logFormatter);
 
   node->SetLogLevel(info);
   node->Start();
@@ -74,12 +76,12 @@ int main(int argc, char **argv) {
   std::thread tx, rx;
 
   double bytesPerSecond = dataRate / 8.;
-  double microsPerByte = 1000000 / bytesPerSecond;
+  double nanosPerByte = 1e9 / bytesPerSecond;
   log->Info("data rate (bps) = {} ; packet size = {} ; num. packets = {} ; "
             "bytes/second = {}\nmicros/byte = {}",
-            dataRate, packetSize, nPackets, bytesPerSecond, microsPerByte);
+            dataRate, packetSize, nPackets, bytesPerSecond, nanosPerByte);
   tx = std::thread([node, pb, nodeName, log, nPackets, packetSize,
-                    microsPerByte, mac, msStart]() {
+                    nanosPerByte, mac, msStart]() {
     auto txPacket = pb->Create();
     std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDesDir(mac);
     uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
@@ -97,11 +99,11 @@ int main(int argc, char **argv) {
       *seqPtr = npacket;
       txPacket->PayloadUpdated(msgSize + 2);
       auto pktSize = txPacket->GetPacketSize();
-      auto micros = (uint32_t)round(pktSize * microsPerByte);
-      log->Info("Transmitting packet (Seq. Num: {} ; Size: {} ; ETA: {})",
-                npacket, pktSize, micros);
+      auto nanos = (uint32_t)round(pktSize * nanosPerByte);
+      log->Info("TX ; SEQ: {} ; SIZE: {}",
+                  npacket, txPacket->GetPacketSize());
       node << txPacket;
-      std::this_thread::sleep_for(chrono::microseconds(micros));
+      std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
   });
 
@@ -111,10 +113,10 @@ int main(int argc, char **argv) {
       node >> dlf;
       if (dlf->PacketIsOk()) {
         uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
-        log->Info("Packet received!: Seq. Num: {} ; Size: {}", *seqPtr,
-                  dlf->GetPacketSize());
+        log->Info("RX ; SEQ: {} ; SIZE: {}", *seqPtr,
+                    dlf->GetPacketSize());
       } else
-        log->Warn("Packet received with errors!");
+        log->Warn("ERR");
     }
   });
   tx.join();
