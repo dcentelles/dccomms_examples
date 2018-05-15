@@ -160,5 +160,5 @@ int main(int argc, char **argv) {
   if (enableRx)
     rx.join();
 
-  exit(0);
+  return 0;
 }

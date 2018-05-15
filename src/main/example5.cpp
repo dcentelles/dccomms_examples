@@ -139,5 +139,5 @@ int main(int argc, char **argv) {
 
   tx.join();
   rx.join();
-  exit(0);
+  return 0;
 }
