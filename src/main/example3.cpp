@@ -8,6 +8,7 @@
  * This example sends Hello World messages through several methods of
  * a CommsDeviceSocket instance using the CommsDeviceService as StreamCommsDevice.
  * It uses the DataLinkFrame with CRC16.
+ * It creates two different CommsDeviceServices: one to transmit and other to receive.
  */
 
 using namespace dccomms;
@@ -17,11 +18,14 @@ int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName = "tx", rxName = "rx";
   bool enableTx = false, enableRx = false;
   uint32_t dataRate = 20, payloadSize = 5, txmac = 2, rxmac = 1;
+  bool flush = false, asyncLog = false;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
     options.add_options()
         ("f,log-file", "File to save the log",cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
+        ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
+        ("a,async-log", "async-log", cxxopts::value<bool>(asyncLog))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ("help", "Print help");
 
@@ -51,9 +55,16 @@ int main(int argc, char **argv) {
 
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
   Ptr<Logger> log = CreateObject<Logger>();
-  log->FlushLogOn(info);
   log->SetLogName("Main");
   log->SetLogLevel(logLevel);
+
+  if (flush) {
+    log->FlushLogOn(info);
+    log->Info("Flush log on info");
+  }
+
+  if (asyncLog)
+    log->SetAsyncMode();
 
   double bytesPerSecond = dataRate / 8.;
   double nanosPerByte = 1e9 / bytesPerSecond;
@@ -82,12 +93,17 @@ int main(int argc, char **argv) {
 
   if (enableTx) {
 
-    tx = std::thread([pb, nanosPerByte, logLevel, txName, txmac, payloadSize, logFormatter]() {
+    tx = std::thread([flush, asyncLog, pb, nanosPerByte, logLevel, txName, txmac, payloadSize, logFormatter]() {
       Ptr<Logger> log = CreateObject<Logger>();
-      log->FlushLogOn(info);
       log->SetLogName("Tx");
       log->SetLogLevel(logLevel);
       log->SetLogFormatter(logFormatter);
+      if (flush) {
+        log->FlushLogOn(info);
+        log->Info("Flush log on info");
+      }
+      if (asyncLog)
+        log->SetAsyncMode();
 
       CommsDeviceServicePtr service(new CommsDeviceService(pb));
       service->SetCommsDeviceId(txName);

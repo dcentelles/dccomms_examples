@@ -6,9 +6,9 @@
 
 /*
  * This is a tool to study the communication link capabilities using the CommsDeviceService
- * as StreamCommsDevice.
- * It uses the SimplePacket with CRC16.
+ * as StreamCommsDevice. It uses the SimplePacket with CRC16.
  * Each packet sent encodes the sequence number in 16 bits.
+ * It creates two different CommsDeviceServices: one to transmit and other to receive.
  */
 
 using namespace dccomms_packets;
@@ -19,11 +19,14 @@ int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName, rxName;
   bool enableTx = false, enableRx = false;
   uint32_t dataRate = 200, packetSize = 20, nPackets = 50, packetSizeOffset = 0;
+  bool flush = false, asyncLog = false;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
     options.add_options()
         ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
+        ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
+        ("a,async-log", "async-log", cxxopts::value<bool>(asyncLog))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ( "help", "Print help")
         ("packet-size", "packet size in bytes (payload size = packet size - 3)", cxxopts::value<uint32_t>(packetSize))
@@ -56,7 +59,12 @@ int main(int argc, char **argv) {
   }
   log->SetLogName("Main");
   log->SetLogLevel(logLevel);
-  log->FlushLogOn(info);
+  if (flush) {
+    log->FlushLogOn(info);
+    log->Info("Flush log on info");
+  }
+  if (asyncLog)
+    log->SetAsyncMode();
 
   PacketBuilderPtr pb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
   auto emptyPacket = pb->Create();
@@ -72,10 +80,15 @@ int main(int argc, char **argv) {
     if (logFile != "") {
       txLog->LogToFile(logFile + "_" + txName);
     }
-    txLog->FlushLogOn(info);
     txLog->SetLogName(txName);
     txLog->SetLogLevel(logLevel);
     txLog->SetLogFormatter(logFormatter);
+    if (flush) {
+      txLog->FlushLogOn(info);
+      txLog->Info("Flush log on info");
+    }
+    if (asyncLog)
+      txLog->SetAsyncMode();
     txnode->SetLogLevel(info);
     txnode->SetCommsDeviceId(txName);
     txnode->Start();
@@ -83,7 +96,7 @@ int main(int argc, char **argv) {
     double bytesPerSecond = dataRate / 8.;
     uint64_t nanosPerByte = 1e9 / bytesPerSecond;
     log->Info("data rate (bps) = {} ; packet size = {} (+offset = {}); num. packets = {} ; "
-              "bytes/second = {}\nmicros/byte = {}",
+              "bytes/second = {}\nnanos/byte = {}",
               dataRate, packetSize, totalPacketSize, nPackets, bytesPerSecond, nanosPerByte);
     tx = std::thread([txnode, pb, txName, txLog, nPackets, nanosPerByte,
                       payloadSize, totalPacketSize]() {
@@ -114,10 +127,15 @@ int main(int argc, char **argv) {
     if (logFile != "") {
       rxLog->LogToFile(logFile + "_" + rxName);
     }
-    rxLog->FlushLogOn(info);
     rxLog->SetLogName(rxName);
     rxLog->SetLogLevel(logLevel);
     rxLog->SetLogFormatter(logFormatter);
+    if (flush) {
+      rxLog->FlushLogOn(info);
+      rxLog->Info("Flush log on info");
+    }
+    if (asyncLog)
+      rxLog->SetAsyncMode();
     rxnode->SetLogLevel(info);
     rxnode->SetCommsDeviceId(rxName);
     rxnode->Start();

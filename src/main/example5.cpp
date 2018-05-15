@@ -5,10 +5,14 @@
 
 /*
  * This is a tool to study the communication link capabilities using the
- * CommsDeviceService
- * as StreamCommsDevice.
+ * CommsDeviceService as StreamCommsDevice.
  * It uses the DataLinkFramePacket with CRC16.
- * Each packet sent encodes the sequence number in 16 bits.
+ * This serves to build a communication pipe such as:
+ *
+ * TX shell:
+ *    ffmpeg <capture and encode options> | this_tool <comms options>
+ * RX shell:
+ *    this_tool <comms options> | ffplay <decode and visualization options>
  */
 
 using namespace dccomms;
@@ -17,13 +21,16 @@ using namespace std;
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 999999, payloadSize = 20, mac = 1;
+  bool flush = false, asyncLog = false;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
     options.add_options()(
         "f,log-file", "File to save the log",
         cxxopts::value<std::string>(logFile)->default_value("")->implicit_value(
-            "example4_log"))(
+            "example4_log"))("F,flush-log", "flush log",
+                             cxxopts::value<bool>(flush))(
+        "a,async-log", "async-log", cxxopts::value<bool>(asyncLog))(
         "l,log-level", "log level: critical,debug,err,info,off,trace,warn",
         cxxopts::value<std::string>(logLevelStr)->default_value("info"))(
         "help", "Print help");
@@ -62,10 +69,16 @@ int main(int argc, char **argv) {
     log->LogToFile(logFile);
   }
   log->SetLogLevel(logLevel);
-  log->FlushLogOn(info);
   log->SetLogName(nodeName);
   log->LogToConsole(false);
   log->SetLogFormatter(logFormatter);
+
+  if (flush) {
+    log->FlushLogOn(info);
+    log->Info("Flush log on info");
+  }
+  if (asyncLog)
+    log->SetAsyncMode();
 
   node->SetLogLevel(warn);
   node->Start();
@@ -81,7 +94,7 @@ int main(int argc, char **argv) {
     double nanosPerByte = 1e9 / bytesPerSecond;
     log->Info("data rate (bps) = {} ; payload size = {} ; total size (payload "
               "+ overhead): {} ; "
-              "bytes/second = {}\nmicros/byte = {}",
+              "bytes/second = {}\nnanos/byte = {}",
               dataRate, payloadSize, txPacket->GetPacketSize(), bytesPerSecond,
               nanosPerByte);
 
