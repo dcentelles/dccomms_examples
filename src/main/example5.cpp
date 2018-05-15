@@ -25,24 +25,17 @@ int main(int argc, char **argv) {
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
-    options.add_options()(
-        "f,log-file", "File to save the log",
-        cxxopts::value<std::string>(logFile)->default_value("")->implicit_value(
-            "example4_log"))("F,flush-log", "flush log",
-                             cxxopts::value<bool>(flush))(
-        "a,async-log", "async-log", cxxopts::value<bool>(asyncLog))(
-        "l,log-level", "log level: critical,debug,err,info,off,trace,warn",
-        cxxopts::value<std::string>(logLevelStr)->default_value("info"))(
-        "help", "Print help");
-    options.add_options("node_comms")("mac", "MAC address",
-                                      cxxopts::value<uint32_t>(mac))(
-        "payload-size", "payload size in bytes",
-        cxxopts::value<uint32_t>(payloadSize))(
-        "data-rate", "application data rate in bps (a high value could "
-                     "saturate the output buffer",
-        cxxopts::value<uint32_t>(dataRate))(
-        "node-name", "dccomms id",
-        cxxopts::value<std::string>(nodeName)->default_value("node0"));
+    options.add_options()
+        ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example4_log"))
+        ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
+        ("a,async-log", "async-log", cxxopts::value<bool>(asyncLog))
+        ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
+        ("help", "Print help");
+    options.add_options("node_comms")
+        ("mac", "MAC address", cxxopts::value<uint32_t>(mac))
+        ("payload-size", "payload size in bytes", cxxopts::value<uint32_t>(payloadSize))
+        ("data-rate", "application data rate in bps (a high value could saturate the output buffer", cxxopts::value<uint32_t>(dataRate))
+        ("node-name", "dccomms id", cxxopts::value<std::string>(nodeName)->default_value("node0"));
 
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -126,10 +119,7 @@ int main(int argc, char **argv) {
       node >> dlf;
       if (dlf->PacketIsOk()) {
         write(1, dlf->GetPayloadBuffer(), dlf->GetPayloadSize());
-      } /*
-  else
-         log->Warn("Packet received with errors!");
-         */
+      }
     }
   });
   tx.join();
