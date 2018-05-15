@@ -2,6 +2,7 @@
 #include <cxxopts.hpp>
 #include <dccomms/dccomms.h>
 #include <iostream>
+#include <cpputils/SignalManager.h>
 
 /*
  * This is a tool to study the communication link capabilities using the CommsDeviceService
@@ -12,12 +13,13 @@
 
 using namespace dccomms;
 using namespace std;
+using namespace cpputils;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName, rxName;
   bool enableTx = false, enableRx = false;
   uint32_t dataRate = 200, packetSize = 20, nPackets = 50, txmac = 1, rxmac = 2;
-  bool flush = false, asyncLog = false;
+  bool flush = false, asyncLog = true;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
@@ -52,19 +54,39 @@ int main(int argc, char **argv) {
   }
 
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
-  Ptr<Logger> log = CreateObject<Logger>();
-  log->FlushLogOn(info);
+  Ptr<Logger> log = CreateObject<Logger>(),
+      rxLog  = CreateObject<Logger>(),
+      txLog = CreateObject<Logger>();
+
   if (logFile != "") {
     log->LogToFile(logFile);
+    txLog->LogToFile(logFile + "_" + txName);
+    rxLog->LogToFile(logFile + "_" + rxName);
   }
   log->SetLogName("Main");
   log->SetLogLevel(logLevel);
+  txLog->SetLogLevel(logLevel);
+  rxLog->SetLogLevel(logLevel);
 
-  if (asyncLog)
+  if (asyncLog){
     log->SetAsyncMode();
+    txLog->SetAsyncMode();
+    rxLog->SetAsyncMode();
+    log->Info("Async. log");
+  }
 
   //https://github.com/gabime/spdlog/wiki/3.-Custom-formattingges
-  //log->SetLogFormatter(std::make_shared<spdlog::pattern_formatter>("[%D %T.%F] %v"));
+  //log->SetLogFormatter(std::make_shared<spdlog::pattern_formatter>("[%D %T.%F] %v"))
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
+  txLog->SetLogFormatter(logFormatter);
+  rxLog->SetLogFormatter(logFormatter);
+
+  if (flush) {
+    txLog->FlushLogOn(info);
+    rxLog->FlushLogOn(info);
+    log->FlushLogOn(info);
+    log->Info("Flush log on info");
+  };
 
   auto checksumType = DataLinkFrame::fcsType::crc16;
   Ptr<DataLinkFramePacketBuilder> pb =
@@ -72,22 +94,9 @@ int main(int argc, char **argv) {
 
   std::thread tx, rx;
 
-  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
   if (enableTx) {
     Ptr<CommsDeviceService> txnode = CreateObject<CommsDeviceService>(pb);
-    Ptr<Logger> txLog = CreateObject<Logger>();
-    if (logFile != "") {
-      txLog->LogToFile(logFile + "_" + txName);
-    }
-    txLog->SetLogName(txName);
-    txLog->SetLogLevel(logLevel);
-    txLog->SetLogFormatter(logFormatter);
-    if (flush) {
-      txLog->FlushLogOn(info);
-      txLog->Info("Flush log on info");
-    }
-    if (asyncLog)
-      txLog->SetAsyncMode();
+
     txnode->SetLogLevel(info);
     txnode->SetCommsDeviceId(txName);
     txnode->Start();
@@ -126,19 +135,6 @@ int main(int argc, char **argv) {
 
   if (enableRx) {
     Ptr<CommsDeviceService> rxnode = CreateObject<CommsDeviceService>(pb);
-    Ptr<Logger> rxLog = CreateObject<Logger>();
-    if (logFile != "") {
-      rxLog->LogToFile(logFile + "_" + rxName);
-    }
-    rxLog->SetLogName(rxName);
-    rxLog->SetLogLevel(logLevel);
-    rxLog->SetLogFormatter(logFormatter);
-    if (flush) {
-      rxLog->FlushLogOn(info);
-      rxLog->Info("Flush log on info");
-    }
-    if (asyncLog)
-      rxLog->SetAsyncMode();
     rxnode->SetLogLevel(info);
     rxnode->SetCommsDeviceId(rxName);
     rxnode->Start();
@@ -155,6 +151,18 @@ int main(int argc, char **argv) {
       }
     });
   }
+
+  SignalManager::SetLastCallback(SIGINT, [&](int sig)
+  {
+      printf("Received %d signal.\nFlushing log messages...", sig);
+      fflush(stdout);
+      log->FlushLog();
+      txLog->FlushLog();
+      rxLog->FlushLog();
+      Utils::Sleep(2000);
+      printf("Log messages flushed.\n");
+      exit(0);
+  });
 
   if (enableTx)
     tx.join();

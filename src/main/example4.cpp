@@ -2,6 +2,7 @@
 #include <cxxopts.hpp>
 #include <dccomms/dccomms.h>
 #include <iostream>
+#include <cpputils/SignalManager.h>
 
 /*
  * This is a tool to study the communication link capabilities using the
@@ -13,12 +14,13 @@
 
 using namespace dccomms;
 using namespace std;
+using namespace cpputils;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 200, packetSize = 20, nPackets = 50, mac = 1;
   uint64_t msStart = 0;
-  bool flush = false, asyncLog = false;
+  bool flush = false, asyncLog = true;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
@@ -70,9 +72,10 @@ int main(int argc, char **argv) {
     log->Info("Flush log on info");
   }
 
-  if (asyncLog)
+  if (asyncLog){
     log->SetAsyncMode();
-
+    log->Info("Async. log");
+  }
   node->SetLogLevel(info);
   node->Start();
 
@@ -120,6 +123,17 @@ int main(int argc, char **argv) {
         log->Warn("ERR");
     }
   });
+
+  SignalManager::SetLastCallback(SIGINT, [&](int sig)
+  {
+      printf("Received %d signal.\nFlushing log messages...", sig);
+      fflush(stdout);
+      log->FlushLog();
+      Utils::Sleep(2000);
+      printf("Log messages flushed.\n");
+      exit(0);
+  });
+
   tx.join();
   rx.join();
   exit(0);
