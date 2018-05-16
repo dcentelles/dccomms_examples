@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(pb);
   node->SetCommsDeviceId(nodeName);
 
-  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("%D %T.%F %v");
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
   Ptr<Logger> log = CreateObject<Logger>();
   if (logFile != "") {

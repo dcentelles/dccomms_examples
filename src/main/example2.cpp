@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
 
   //https://github.com/gabime/spdlog/wiki/3.-Custom-formattingges
   //log->SetLogFormatter(std::make_shared<spdlog::pattern_formatter>("[%D %T.%F] %v"))
-  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("[%T.%F] %v");
+  auto logFormatter = std::make_shared<spdlog::pattern_formatter>("%D %T.%F %v");
   txLog->SetLogFormatter(logFormatter);
   rxLog->SetLogFormatter(logFormatter);
 
