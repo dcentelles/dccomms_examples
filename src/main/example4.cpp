@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
       txPacket->PayloadUpdated(msgSize + 2);
       auto pktSize = txPacket->GetPacketSize();
       auto nanos = (uint32_t)round(pktSize * nanosPerByte);
-      log->Info("TX ; SEQ: {} ; SIZE: {}", npacket, txPacket->GetPacketSize());
+      log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
       node >> dlf;
       if (dlf->PacketIsOk()) {
         uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
-        log->Info("RX ; SEQ: {} ; SIZE: {}", *seqPtr, dlf->GetPacketSize());
+        log->Info("RX SEQ {} SIZE {}", *seqPtr, dlf->GetPacketSize());
       } else
         log->Warn("ERR");
     }

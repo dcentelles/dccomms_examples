@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
       bytesInBuffer = 0;
       auto pktSize = txPacket->GetPacketSize();
       auto nanos = (uint32_t)round(pktSize * nanosPerByte);
-      log->Info("TX ; SIZE: {}", pktSize);
+      log->Info("TX SIZE: {}", pktSize);
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
