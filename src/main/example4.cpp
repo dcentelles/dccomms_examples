@@ -20,7 +20,7 @@ using namespace dccomms_packets;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 0, add = 1, dstadd = 2;
+  uint32_t dataRate = 200, packetSize = 20, nPackets = 0, add = 1, dstadd = 2, packetSizeOffset = 0;
   uint64_t msStart = 0;
   enum PktType { DLF = 0, SP };
   PktType pktType;
@@ -44,6 +44,7 @@ int main(int argc, char **argv) {
         ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default 0)", cxxopts::value<uint64_t>(msStart))
         ("packet-size", "packet size in bytes (overhead + payload) (default 20 Bytes)", cxxopts::value<uint32_t>(packetSize))
         ("data-rate", "application data rate in bps. A high value could saturate the output buffer (default 200 bps)", cxxopts::value<uint32_t>(dataRate))
+        ("packet-size-offset", "packet size offset in bytes (default = 0)", cxxopts::value<uint32_t>(packetSizeOffset))
         ("node-name", "dccomms id", cxxopts::value<std::string>(nodeName)->default_value("node0"));
 
     auto result = options.parse(argc, argv);
@@ -91,6 +92,7 @@ int main(int argc, char **argv) {
   for (uint8_t *pptr = asciiMsg; pptr < maxPtr; pptr++) {
     *pptr = digit++;
   }
+  uint32_t totalPacketSize = packetSize + packetSizeOffset;
 
   Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(pb);
   node->SetCommsDeviceId(nodeName);
@@ -121,18 +123,18 @@ int main(int argc, char **argv) {
 
   double bytesPerSecond = dataRate / 8.;
   double nanosPerByte = 1e9 / bytesPerSecond;
-  log->Info("data rate (bps) = {} ; packet size = {} ; num. packets = {} ; "
+  log->Info("data rate (bps) = {} ; packet size = {} (+offset = {}) ; num. packets = {} ; "
             "bytes/second = {}\nnanos/byte = {}",
-            dataRate, packetSize, nPackets, bytesPerSecond, nanosPerByte);
+            dataRate, packetSize, totalPacketSize, nPackets, bytesPerSecond, nanosPerByte);
 
 
-  tx = std::thread([node, seqPtr, txPacket, log, nPackets, packetSize, nanosPerByte, msStart, msgSize]() {
+  tx = std::thread([totalPacketSize, node, seqPtr, txPacket, log, nPackets, packetSize, nanosPerByte, msStart, msgSize]() {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
       txPacket->PayloadUpdated(msgSize + 2);
       auto pktSize = txPacket->GetPacketSize();
-      auto nanos = (uint32_t)round(pktSize * nanosPerByte);
+      auto nanos = (uint32_t)round(totalPacketSize * nanosPerByte);
       log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
