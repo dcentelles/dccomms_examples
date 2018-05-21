@@ -20,7 +20,7 @@ using namespace dccomms_packets;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, add = 1, dstadd = 2;
+  uint32_t dataRate = 200, packetSize = 20, nPackets = 0, add = 1, dstadd = 2;
   uint64_t msStart = 0;
   enum PktType { DLF = 0, SP };
   PktType pktType;
@@ -34,17 +34,17 @@ int main(int argc, char **argv) {
             "example4_log"))
         ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
         ("a,async-log", "async-log", cxxopts::value<bool>(asyncLog))
-        ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value("info"))
+        ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value(logLevelStr))
         ("help", "Print help");
     options.add_options("node_comms")
         ("packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(pktTypeInt))
         ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
         ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
-        ("num-packets", "number of packets to transmit", cxxopts::value<uint32_t>(nPackets))
-        ("ms-start", "It will begin to transmit num-packets packets after ms-start millis", cxxopts::value<uint64_t>(msStart))
-        ("packet-size", "packet size in bytes (overhead + payload)", cxxopts::value<uint32_t>(packetSize))
-        ("data-rate", "application data rate in bps (a high value could saturate the output buffer", cxxopts::value<uint32_t>(dataRate))
-        ("node-name", "dccomms id for the tx node", cxxopts::value<std::string>(nodeName)->default_value("node0"));
+        ("num-packets", "number of packets to transmit (default 0)", cxxopts::value<uint32_t>(nPackets))
+        ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default 0)", cxxopts::value<uint64_t>(msStart))
+        ("packet-size", "packet size in bytes (overhead + payload) (default 20 Bytes)", cxxopts::value<uint32_t>(packetSize))
+        ("data-rate", "application data rate in bps. A high value could saturate the output buffer (default 200 bps)", cxxopts::value<uint32_t>(dataRate))
+        ("node-name", "dccomms id", cxxopts::value<std::string>(nodeName)->default_value("node0"));
 
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
