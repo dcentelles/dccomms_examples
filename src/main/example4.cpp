@@ -3,11 +3,12 @@
 #include <dccomms/dccomms.h>
 #include <iostream>
 #include <cpputils/SignalManager.h>
+#include <dccomms_packets/SimplePacket.h>
 
 /*
  * This is a tool to study the communication link capabilities using the
  * CommsDeviceService as StreamCommsDevice.
- * It uses the DataLinkFramePacket with CRC16.
+ * It uses the DataLinkFramePacket or SimplePacket (all with CRC16).
  * Each packet sent encodes the sequence number in 16 bits.
  * It creates one CommsDeviceService (for transmitting and receiving)
  */
@@ -15,14 +16,18 @@
 using namespace dccomms;
 using namespace std;
 using namespace cpputils;
+using namespace dccomms_packets;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, mac = 1;
+  uint32_t dataRate = 200, packetSize = 20, nPackets = 50, add = 1, dstadd = 2;
   uint64_t msStart = 0;
+  enum PktType { DLF = 0, SP };
+  PktType pktType;
+  uint32_t pktTypeInt = 1;
   bool flush = false, asyncLog = true;
   try {
-    cxxopts::Options options("dccomms_examples/example3",
+    cxxopts::Options options("dccomms_examples/example4",
                              " - command line options");
     options.add_options()
         ("f,log-file", "File to save the log",cxxopts::value<std::string>(logFile)->default_value("")->implicit_value(
@@ -32,10 +37,12 @@ int main(int argc, char **argv) {
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ("help", "Print help");
     options.add_options("node_comms")
-        ("mac", "MAC address", cxxopts::value<uint32_t>(mac))
+        ("packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(pktTypeInt))
+        ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
+        ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
         ("num-packets", "number of packets to transmit", cxxopts::value<uint32_t>(nPackets))
-        ("ms-start", "packet size in bytes", cxxopts::value<uint64_t>(msStart))
-        ("packet-size", "packet size in bytes", cxxopts::value<uint32_t>(packetSize))
+        ("ms-start", "It will begin to transmit num-packets packets after ms-start millis", cxxopts::value<uint64_t>(msStart))
+        ("packet-size", "packet size in bytes (overhead + payload)", cxxopts::value<uint32_t>(packetSize))
         ("data-rate", "application data rate in bps (a high value could saturate the output buffer", cxxopts::value<uint32_t>(dataRate))
         ("node-name", "dccomms id for the tx node", cxxopts::value<std::string>(nodeName)->default_value("node0"));
 
@@ -49,10 +56,41 @@ int main(int argc, char **argv) {
     std::cout << "error parsing options: " << e.what() << std::endl;
     exit(1);
   }
-
-  auto checksumType = DataLinkFrame::fcsType::crc16;
-  Ptr<DataLinkFramePacketBuilder> pb =
-      CreateObject<DataLinkFramePacketBuilder>(checksumType);
+  pktType = static_cast<PktType>(pktTypeInt);
+  PacketBuilderPtr pb;
+  Ptr<Packet> txPacket;
+  uint32_t payloadSize;
+  switch(pktType){
+    case DLF:{
+        auto checksumType = DataLinkFrame::fcsType::crc16;
+        pb = CreateObject<DataLinkFramePacketBuilder>(checksumType);
+        txPacket = pb->Create();
+        txPacket->PayloadUpdated(0);
+        auto emptyPacketSize = txPacket->GetPacketSize();
+        payloadSize = packetSize - emptyPacketSize;
+        std::static_pointer_cast<DataLinkFrame>(txPacket)->SetSrcAddr(add);
+        std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDestAddr(dstadd);
+        break;
+    }
+    case SP:{
+        pb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
+        txPacket = pb->Create();
+        auto emptyPacketSize = txPacket->GetPacketSize();
+        payloadSize = packetSize - emptyPacketSize;
+        pb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
+        txPacket = pb->Create();
+    }
+    default:
+      std::cerr << "wrong packet type" << std::endl;
+  }
+  uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
+  uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
+  uint32_t msgSize = payloadSize - 2;
+  uint8_t *maxPtr = asciiMsg + msgSize;
+  char digit = '0';
+  for (uint8_t *pptr = asciiMsg; pptr < maxPtr; pptr++) {
+    *pptr = digit++;
+  }
 
   Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(pb);
   node->SetCommsDeviceId(nodeName);
@@ -86,20 +124,9 @@ int main(int argc, char **argv) {
   log->Info("data rate (bps) = {} ; packet size = {} ; num. packets = {} ; "
             "bytes/second = {}\nnanos/byte = {}",
             dataRate, packetSize, nPackets, bytesPerSecond, nanosPerByte);
-  tx = std::thread([node, pb, log, nPackets, packetSize, nanosPerByte,
-                    mac, msStart]() {
-    auto txPacket = pb->Create();
-    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDesDir(mac);
-    uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
-    uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
-    txPacket->PayloadUpdated(0);
-    uint32_t payloadSize = packetSize - txPacket->GetPacketSize();
-    uint32_t msgSize = payloadSize - 2;
-    uint8_t *maxPtr = asciiMsg + msgSize;
-    char digit = '0';
-    for (uint8_t *pptr = asciiMsg; pptr < maxPtr; pptr++) {
-      *pptr = digit++;
-    }
+
+
+  tx = std::thread([node, seqPtr, txPacket, log, nPackets, packetSize, nanosPerByte, msStart, msgSize]() {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
