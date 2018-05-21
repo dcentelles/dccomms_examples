@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
   enum PktType { DLF = 0, SP };
   PktType pktType;
   uint32_t pktTypeInt = 1;
-  bool flush = false, asyncLog = true;
+  bool flush = false, asyncLog = true, disableRx = false;
   try {
     cxxopts::Options options("dccomms_examples/example4",
                              " - command line options");
@@ -40,11 +40,12 @@ int main(int argc, char **argv) {
         ("packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(pktTypeInt))
         ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
         ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
-        ("num-packets", "number of packets to transmit (default 0)", cxxopts::value<uint32_t>(nPackets))
-        ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default 0)", cxxopts::value<uint64_t>(msStart))
-        ("packet-size", "packet size in bytes (overhead + payload) (default 20 Bytes)", cxxopts::value<uint32_t>(packetSize))
-        ("data-rate", "application data rate in bps. A high value could saturate the output buffer (default 200 bps)", cxxopts::value<uint32_t>(dataRate))
-        ("packet-size-offset", "packet size offset in bytes (default = 0)", cxxopts::value<uint32_t>(packetSizeOffset))
+        ("num-packets", "number of packets to transmit (default: 0)", cxxopts::value<uint32_t>(nPackets))
+        ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default: 0 ms)", cxxopts::value<uint64_t>(msStart))
+        ("packet-size", "packet size in bytes (overhead + payload) (default: 20 Bytes)", cxxopts::value<uint32_t>(packetSize))
+        ("data-rate", "application data rate in bps. A high value could saturate the output buffer (default: 200 bps)", cxxopts::value<uint32_t>(dataRate))
+        ("packet-size-offset", "packet size offset in bytes (default: 0)", cxxopts::value<uint32_t>(packetSizeOffset))
+        ("disable-rx", "disable packets reception (default: false)", cxxopts::value<bool>(disableRx))
         ("node-name", "dccomms id", cxxopts::value<std::string>(nodeName)->default_value("node0"));
 
     auto result = options.parse(argc, argv);
@@ -141,17 +142,19 @@ int main(int argc, char **argv) {
     }
   });
 
-  rx = std::thread([node, pb, log]() {
-    PacketPtr dlf = pb->Create();
-    while (true) {
-      node >> dlf;
-      if (dlf->PacketIsOk()) {
-        uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
-        log->Info("RX SEQ {} SIZE {}", *seqPtr, dlf->GetPacketSize());
-      } else
-        log->Warn("ERR");
-    }
-  });
+  if (!disableRx) {
+    rx = std::thread([node, pb, log]() {
+      PacketPtr dlf = pb->Create();
+      while (true) {
+        node >> dlf;
+        if (dlf->PacketIsOk()) {
+          uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
+          log->Info("RX SEQ {} SIZE {}", *seqPtr, dlf->GetPacketSize());
+        } else
+          log->Warn("ERR");
+      }
+    });
+  }
 
   SignalManager::SetLastCallback(SIGINT, [&](int sig)
   {
@@ -164,6 +167,7 @@ int main(int argc, char **argv) {
   });
 
   tx.join();
-  rx.join();
+  if (!disableRx)
+    rx.join();
   return 0;
 }
