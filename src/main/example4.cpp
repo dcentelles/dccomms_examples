@@ -22,8 +22,8 @@ int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 200, txPacketSize = 20, rxPacketSize = 20, nPackets = 0, add = 1, dstadd = 2, packetSizeOffset = 0;
   uint64_t msStart = 0;
-  enum PktType { DLF = 0, SP };
-  uint32_t txPktType = 1, rxPktType = 1;
+  enum PktType { DLF = 0, SP = 1};
+  uint32_t txPktTypeInt = 1, rxPktTypeInt = 1;
   bool flush = false, syncLog = false, disableRx = false;
   try {
     cxxopts::Options options("dccomms_examples/example4",
@@ -36,8 +36,8 @@ int main(int argc, char **argv) {
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value(logLevelStr))
         ("help", "Print help");
     options.add_options("node_comms")
-        ("tx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(txPktType))
-        ("rx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(rxPktType))
+        ("tx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(txPktTypeInt))
+        ("rx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(rxPktTypeInt))
         ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
         ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
         ("num-packets", "number of packets to transmit (default: 0)", cxxopts::value<uint32_t>(nPackets))
@@ -59,7 +59,8 @@ int main(int argc, char **argv) {
     std::cout << "error parsing options: " << e.what() << std::endl;
     exit(1);
   }
-  txPktType = static_cast<PktType>(txPktType);
+  PktType txPktType = static_cast<PktType>(txPktTypeInt);
+  PktType rxPktType = static_cast<PktType>(rxPktTypeInt);
   PacketBuilderPtr rxpb, txpb;
   Ptr<Packet> txPacket;
   uint32_t payloadSize;
@@ -81,10 +82,11 @@ int main(int argc, char **argv) {
         auto emptyPacketSize = txPacket->GetPacketSize();
         payloadSize = txPacketSize - emptyPacketSize;
         txpb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
-        txPacket = rxpb->Create();
+        txPacket = txpb->Create();
+        break;
     }
     default:
-      std::cerr << "wrong packet type" << std::endl;
+      std::cerr << "wrong tx packet type: "<< txPktType << std::endl;
       return 1;
   }
   switch(rxPktType){
@@ -105,9 +107,10 @@ int main(int argc, char **argv) {
         auto emptyPacketSize = rxPacket->GetPacketSize();
         payloadSize = rxPacketSize - emptyPacketSize;
         rxpb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
+        break;
     }
     default:
-      std::cerr << "wrong packet type" << std::endl;
+      std::cerr << "wrong rx packet type: "<< rxPktType << std::endl;
       return 1;
   }
   uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
