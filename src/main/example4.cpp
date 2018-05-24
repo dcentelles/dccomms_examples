@@ -20,11 +20,10 @@ using namespace dccomms_packets;
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
-  uint32_t dataRate = 200, packetSize = 20, nPackets = 0, add = 1, dstadd = 2, packetSizeOffset = 0;
+  uint32_t dataRate = 200, txPacketSize = 20, rxPacketSize = 20, nPackets = 0, add = 1, dstadd = 2, packetSizeOffset = 0;
   uint64_t msStart = 0;
   enum PktType { DLF = 0, SP };
-  PktType pktType;
-  uint32_t pktTypeInt = 1;
+  uint32_t txPktType = 1, rxPktType = 1;
   bool flush = false, syncLog = false, disableRx = false;
   try {
     cxxopts::Options options("dccomms_examples/example4",
@@ -37,12 +36,14 @@ int main(int argc, char **argv) {
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value(logLevelStr))
         ("help", "Print help");
     options.add_options("node_comms")
-        ("packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(pktTypeInt))
+        ("tx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(txPktType))
+        ("rx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(rxPktType))
         ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
         ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
         ("num-packets", "number of packets to transmit (default: 0)", cxxopts::value<uint32_t>(nPackets))
         ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default: 0 ms)", cxxopts::value<uint64_t>(msStart))
-        ("packet-size", "packet size in bytes (overhead + payload) (default: 20 Bytes)", cxxopts::value<uint32_t>(packetSize))
+        ("tx-packet-size", "transmitted packet size in bytes (overhead + payload) (default: 20 Bytes)", cxxopts::value<uint32_t>(txPacketSize))
+        ("rx-packet-size", "received packet size in bytes (overhead + payload). Only needed if packet type is 1 (default: 20 Bytes)", cxxopts::value<uint32_t>(rxPacketSize))
         ("data-rate", "application data rate in bps. A high value could saturate the output buffer (default: 200 bps)", cxxopts::value<uint32_t>(dataRate))
         ("packet-size-offset", "packet size offset in bytes (default: 0)", cxxopts::value<uint32_t>(packetSizeOffset))
         ("disable-rx", "disable packets reception (default: false)", cxxopts::value<bool>(disableRx))
@@ -58,32 +59,56 @@ int main(int argc, char **argv) {
     std::cout << "error parsing options: " << e.what() << std::endl;
     exit(1);
   }
-  pktType = static_cast<PktType>(pktTypeInt);
-  PacketBuilderPtr pb;
+  txPktType = static_cast<PktType>(txPktType);
+  PacketBuilderPtr rxpb, txpb;
   Ptr<Packet> txPacket;
   uint32_t payloadSize;
-  switch(pktType){
+  switch(txPktType){
     case DLF:{
         auto checksumType = DataLinkFrame::fcsType::crc16;
-        pb = CreateObject<DataLinkFramePacketBuilder>(checksumType);
-        txPacket = pb->Create();
+        txpb = CreateObject<DataLinkFramePacketBuilder>(checksumType);
+        txPacket = txpb->Create();
         txPacket->PayloadUpdated(0);
         auto emptyPacketSize = txPacket->GetPacketSize();
-        payloadSize = packetSize - emptyPacketSize;
+        payloadSize = txPacketSize - emptyPacketSize;
         std::static_pointer_cast<DataLinkFrame>(txPacket)->SetSrcAddr(add);
         std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDestAddr(dstadd);
         break;
     }
     case SP:{
-        pb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
-        txPacket = pb->Create();
+        txpb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
+        txPacket = txpb->Create();
         auto emptyPacketSize = txPacket->GetPacketSize();
-        payloadSize = packetSize - emptyPacketSize;
-        pb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
-        txPacket = pb->Create();
+        payloadSize = txPacketSize - emptyPacketSize;
+        txpb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
+        txPacket = rxpb->Create();
     }
     default:
       std::cerr << "wrong packet type" << std::endl;
+      return 1;
+  }
+  switch(rxPktType){
+    case DLF:{
+        auto checksumType = DataLinkFrame::fcsType::crc16;
+        rxpb = CreateObject<DataLinkFramePacketBuilder>(checksumType);
+        auto rxPacket = rxpb->Create();
+        rxPacket->PayloadUpdated(0);
+        auto emptyPacketSize = rxPacket->GetPacketSize();
+        payloadSize = rxPacketSize - emptyPacketSize;
+        std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetSrcAddr(add);
+        std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetDestAddr(dstadd);
+        break;
+    }
+    case SP:{
+        rxpb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
+        auto rxPacket = rxpb->Create();
+        auto emptyPacketSize = rxPacket->GetPacketSize();
+        payloadSize = rxPacketSize - emptyPacketSize;
+        rxpb = CreateObject<SimplePacketBuilder>(payloadSize, FCS::CRC16);
+    }
+    default:
+      std::cerr << "wrong packet type" << std::endl;
+      return 1;
   }
   uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
   uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
@@ -93,9 +118,9 @@ int main(int argc, char **argv) {
   for (uint8_t *pptr = asciiMsg; pptr < maxPtr; pptr++) {
     *pptr = digit++;
   }
-  uint32_t totalPacketSize = packetSize + packetSizeOffset;
+  uint32_t totalPacketSize = txPacketSize + packetSizeOffset;
 
-  Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(pb);
+  Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(rxpb);
   node->SetCommsDeviceId(nodeName);
 
   auto logFormatter = std::make_shared<spdlog::pattern_formatter>("%D %T.%F %v");
@@ -126,15 +151,14 @@ int main(int argc, char **argv) {
   double nanosPerByte = 1e9 / bytesPerSecond;
   log->Info("data rate (bps) = {} ; packet size = {} (+offset = {}) ; num. packets = {} ; "
             "bytes/second = {}\nnanos/byte = {}",
-            dataRate, packetSize, totalPacketSize, nPackets, bytesPerSecond, nanosPerByte);
+            dataRate, txPacketSize, totalPacketSize, nPackets, bytesPerSecond, nanosPerByte);
 
 
-  tx = std::thread([totalPacketSize, node, seqPtr, txPacket, log, nPackets, packetSize, nanosPerByte, msStart, msgSize]() {
+  tx = std::thread([totalPacketSize, node, seqPtr, txPacket, log, nPackets, txPacketSize, nanosPerByte, msStart, msgSize]() {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
       txPacket->PayloadUpdated(msgSize + 2);
-      auto pktSize = txPacket->GetPacketSize();
       auto nanos = (uint32_t)round(totalPacketSize * nanosPerByte);
       log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());
       node << txPacket;
@@ -143,8 +167,8 @@ int main(int argc, char **argv) {
   });
 
   if (!disableRx) {
-    rx = std::thread([node, pb, log]() {
-      PacketPtr dlf = pb->Create();
+    rx = std::thread([node, rxpb, log]() {
+      PacketPtr dlf = rxpb->Create();
       while (true) {
         node >> dlf;
         if (dlf->PacketIsOk()) {
