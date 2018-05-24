@@ -23,14 +23,14 @@ using namespace cpputils;
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 999999, payloadSize = 20, mac = 1;
-  bool flush = false, asyncLog = true;
+  bool flush = false, syncLog = false;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
     options.add_options()
         ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example4_log"))
         ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
-        ("a,async-log", "async-log", cxxopts::value<bool>(asyncLog))
+        ("s,sync-log", "sync-log", cxxopts::value<bool>(syncLog))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ("help", "Print help");
     options.add_options("node_comms")
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
     log->FlushLogOn(info);
     log->Info("Flush log on info");
   }
-  if (asyncLog){
+  if (!syncLog){
     log->SetAsyncMode();
     log->Info("Async. log");
   }

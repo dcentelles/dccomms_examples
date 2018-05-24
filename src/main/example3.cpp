@@ -20,14 +20,14 @@ int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", txName = "tx", rxName = "rx";
   bool enableTx = false, enableRx = false;
   uint32_t dataRate = 20, payloadSize = 5, txmac = 2, rxmac = 1;
-  bool flush = false, asyncLog = true;
+  bool flush = false, syncLog = false;
   try {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
     options.add_options()
         ("f,log-file", "File to save the log",cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
         ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
-        ("a,async-log", "async-log", cxxopts::value<bool>(asyncLog))
+        ("s,sync-log", "sync-log", cxxopts::value<bool>(syncLog))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ("help", "Print help");
 
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
   log->SetLogName("main");
   log->SetLogLevel(logLevel);
 
-  if (asyncLog){
+  if (!syncLog){
     log->SetAsyncMode();
     log->Info("Async. log");
   }
@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
 
   if (enableTx) {
 
-    tx = std::thread([flush, asyncLog, pb, nanosPerByte, logLevel, txName, txmac, payloadSize, log]() {
+    tx = std::thread([flush, pb, nanosPerByte, logLevel, txName, txmac, payloadSize, log]() {
 
       CommsDeviceServicePtr service(new CommsDeviceService(pb));
       service->SetCommsDeviceId(txName);
