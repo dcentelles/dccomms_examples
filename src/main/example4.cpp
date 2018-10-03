@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cpputils/SignalManager.h>
 #include <dccomms_packets/SimplePacket.h>
+#include <dccomms_packets/VariableLengthPacket.h>
 
 /*
  * This is a tool to study the communication link capabilities using the
@@ -22,7 +23,7 @@ int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 200, txPacketSize = 20, rxPacketSize = 20, nPackets = 0, add = 1, dstadd = 2, packetSizeOffset = 0;
   uint64_t msStart = 0;
-  enum PktType { DLF = 0, SP = 1};
+  enum PktType { DLF = 0, VL = 1, SP = 2};
   uint32_t txPktTypeInt = 1, rxPktTypeInt = 1;
   bool flush = false, syncLog = false, disableRx = false;
   try {
@@ -36,8 +37,8 @@ int main(int argc, char **argv) {
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value(logLevelStr))
         ("help", "Print help");
     options.add_options("node_comms")
-        ("tx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(txPktTypeInt))
-        ("rx-packet-type", "0: DataLinkFrame, 1: SimplePacket (default).", cxxopts::value<uint32_t>(rxPktTypeInt))
+        ("tx-packet-type", "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket.", cxxopts::value<uint32_t>(txPktTypeInt))
+        ("rx-packet-type", "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket", cxxopts::value<uint32_t>(rxPktTypeInt))
         ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
         ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
         ("num-packets", "number of packets to transmit (default: 0)", cxxopts::value<uint32_t>(nPackets))
@@ -76,6 +77,14 @@ int main(int argc, char **argv) {
         std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDestAddr(dstadd);
         break;
     }
+    case VL:{
+        txpb = CreateObject<VariableLengthPacketBuilder>();
+        txPacket = txpb->Create();
+        txPacket->PayloadUpdated(0);
+        auto emptyPacketSize = txPacket->GetPacketSize();
+        payloadSize = txPacketSize - emptyPacketSize;
+        break;
+    }
     case SP:{
         txpb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
         txPacket = txpb->Create();
@@ -101,6 +110,10 @@ int main(int argc, char **argv) {
         std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetDestAddr(dstadd);
         break;
     }
+    case VL:{
+        rxpb = CreateObject<VariableLengthPacketBuilder>();
+        break;
+    }
     case SP:{
         rxpb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
         auto rxPacket = rxpb->Create();
@@ -124,6 +137,7 @@ int main(int argc, char **argv) {
   uint32_t totalPacketSize = txPacketSize + packetSizeOffset;
 
   Ptr<CommsDeviceService> node = CreateObject<CommsDeviceService>(rxpb);
+  node->SetBlockingTransmission(false);
   node->SetCommsDeviceId(nodeName);
 
   auto logFormatter = std::make_shared<spdlog::pattern_formatter>("%D %T.%F %v");
@@ -162,7 +176,7 @@ int main(int argc, char **argv) {
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
       txPacket->PayloadUpdated(msgSize + 2);
-      auto nanos = (uint32_t)round(totalPacketSize * nanosPerByte);
+      uint64_t nanos = round(totalPacketSize * nanosPerByte);
       log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
