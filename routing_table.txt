@@ -1,0 +1,4 @@
+caca  0/0    boat_wifi
+buoy      2/254  buoy_usbl
+buoy      0/255  buoy_wifi
+bluerov   0/0    bluerov_evo
