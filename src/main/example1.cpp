@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
     options.add_options()
         ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
         ("s,sync-log", "sync-log", cxxopts::value<bool>(syncLog))
-        ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example2_log"))
+        ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value(""))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value("info"))
         ("help", "Print help");
     options.add_options("Transmitter")

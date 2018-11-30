@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
     cxxopts::Options options("dccomms_examples/example3",
                              " - command line options");
     options.add_options()
-        ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value("")->implicit_value("example4_log"))
+        ("f,log-file", "File to save the log", cxxopts::value<std::string>(logFile)->default_value(""))
         ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
         ("s,sync-log", "sync-log", cxxopts::value<bool>(syncLog))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn", cxxopts::value<std::string>(logLevelStr)->default_value("info"))

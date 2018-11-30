@@ -30,8 +30,7 @@ int main(int argc, char **argv) {
     cxxopts::Options options("dccomms_examples/example4",
                              " - command line options");
     options.add_options()
-        ("f,log-file", "File to save the log",cxxopts::value<std::string>(logFile)->default_value("")->implicit_value(
-            "example4_log"))
+        ("f,log-file", "File to save the log",cxxopts::value<std::string>(logFile)->default_value(""))
         ("F,flush-log", "flush log", cxxopts::value<bool>(flush))
         ("s,sync-log", "ssync-log", cxxopts::value<bool>(syncLog))
         ("l,log-level", "log level: critical,debug,err,info,off,trace,warn",cxxopts::value<std::string>(logLevelStr)->default_value(logLevelStr))
@@ -40,7 +39,7 @@ int main(int argc, char **argv) {
         ("tx-packet-type", "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket.", cxxopts::value<uint32_t>(txPktTypeInt))
         ("rx-packet-type", "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket", cxxopts::value<uint32_t>(rxPktTypeInt))
         ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
-        ("dstadd", "Destination device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(dstadd))
+        ("dstadd", "Destination device address (if the packet type is not DataLinkFrame the src and dst addr is set in the first payload byte. Not used in SimplePacket)", cxxopts::value<uint32_t>(dstadd))
         ("num-packets", "number of packets to transmit (default: 0)", cxxopts::value<uint32_t>(nPackets))
         ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default: 0 ms)", cxxopts::value<uint64_t>(msStart))
         ("tx-packet-size", "transmitted packet size in bytes (overhead + payload) (default: 20 Bytes)", cxxopts::value<uint32_t>(txPacketSize))
@@ -127,7 +126,8 @@ int main(int argc, char **argv) {
       return 1;
   }
   uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
-  uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
+  uint8_t *dstPtr = (uint8_t*) (seqPtr + 1);
+  uint8_t *asciiMsg = dstPtr + 1;
   uint32_t msgSize = payloadSize - 2;
   uint8_t *maxPtr = asciiMsg + msgSize;
   char digit = '0';
@@ -171,11 +171,12 @@ int main(int argc, char **argv) {
             dataRate, txPacketSize, totalPacketSize, nPackets, bytesPerSecond, nanosPerByte);
 
 
-  tx = std::thread([totalPacketSize, node, seqPtr, txPacket, log, nPackets, txPacketSize, nanosPerByte, msStart, msgSize]() {
+  tx = std::thread([totalPacketSize, node, seqPtr, dstPtr, dstadd, txPacket, log, nPackets, txPacketSize, nanosPerByte, msStart, msgSize]() {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
-      txPacket->PayloadUpdated(msgSize + 2);
+      *dstPtr = dstadd;
+      txPacket->PayloadUpdated(msgSize + 3);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
       log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());
       node << txPacket;

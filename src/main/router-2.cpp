@@ -41,11 +41,9 @@ int main(int argc, char **argv) {
                              " - command line options");
     options.add_options()(
         "f,log-file", "File to save the log",
-        cxxopts::value<std::string>(logFile)->default_value("")->implicit_value(
-            "router-2"))("table", "File with the routing table",
-                         cxxopts::value<std::string>(routingTable)
-                             ->default_value("")
-                             ->implicit_value("router-2"))(
+        cxxopts::value<std::string>(logFile)->default_value(""))(
+        "t,table", "File with the routing table",
+        cxxopts::value<std::string>(routingTable)->default_value(""))(
         "F,flush-log", "flush log", cxxopts::value<bool>(flush))(
         "s,sync-log", "sync-log", cxxopts::value<bool>(syncLog))(
         "l,log-level", "log level: critical,debug,err,info,off,trace,warn",
@@ -161,9 +159,10 @@ int main(int argc, char **argv) {
     while (true) {
       dev0 >> packet;
       if (packet->PacketIsOk()) {
-        uint8_t *payload = packet->GetPayloadBuffer();
-        uint8_t src = *payload & 0xf;
-        uint8_t dst = (*payload & 0xf0) >> 4;
+        uint16_t *seqPtr = (uint16_t *)packet->GetPayloadBuffer();
+        uint8_t *dstPtr = (uint8_t *)(seqPtr + 1);
+        uint8_t dst = *dstPtr & 0xf;
+        uint8_t src = (*dstPtr & 0xf0) >> 4;
 
         for (auto route : routes) {
           if ((dst & route->mask) == route->addr) {
@@ -179,9 +178,10 @@ int main(int argc, char **argv) {
     while (true) {
       dev0 >> packet;
       if (packet->PacketIsOk()) {
-        uint8_t *payload = packet->GetPayloadBuffer();
-        uint8_t src = *payload & 0xf;
-        uint8_t dst = (*payload & 0xf0) >> 4;
+        uint16_t *seqPtr = (uint16_t *)packet->GetPayloadBuffer();
+        uint8_t *dstPtr = (uint8_t *)(seqPtr + 1);
+        uint8_t dst = *dstPtr & 0xf;
+        uint8_t src = (*dstPtr & 0xf0) >> 4;
 
         for (auto route : routes) {
           if ((dst & route->mask) == route->addr) {
