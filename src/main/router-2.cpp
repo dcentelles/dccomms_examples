@@ -13,7 +13,6 @@
  * This is a tool to build a router with 2 interfaces
  * CommsDeviceService as StreamCommsDevice.
  * It uses the VariableLengthPacket with CRC16.
- * This serves to build a communication pipe such as:
  *
  */
 #define MAX_LINE_LENGTH 200
@@ -154,34 +153,39 @@ int main(int argc, char **argv) {
   dev1->Start();
   std::thread dev0Rx, dev1Rx;
 
-  dev0Rx = std::thread([dev0, dev1, dev0Name, dev1Name, pb, log, routes]() {
+  dev0Rx = std::thread([&]() {
     PacketPtr packet = pb->Create();
     while (true) {
       dev0 >> packet;
       if (packet->PacketIsOk()) {
-        uint16_t *seqPtr = (uint16_t *)packet->GetPayloadBuffer();
-        uint8_t *dstPtr = (uint8_t *)(seqPtr + 1);
-        uint8_t dst = *dstPtr & 0xf;
+        uint8_t *dstPtr = packet->GetPayloadBuffer();
         uint8_t src = (*dstPtr & 0xf0) >> 4;
+        uint8_t dst = *dstPtr & 0xf;
+        uint16_t *seqPtr = (uint16_t *)(dstPtr + 1);
 
+        log->Info("PKT {}  SEQ {}  DST {}  SRC {}", packet->GetPacketSize(),
+                  *seqPtr, dst, src);
         for (auto route : routes) {
           if ((dst & route->mask) == route->addr) {
             route->dev << packet;
           }
         }
       }
+      else{
+          log->Error("PKT ERROR");
+      }
     }
   });
 
-  dev1Rx = std::thread([dev0, dev1, dev0Name, dev1Name, pb, log, routes]() {
+  dev1Rx = std::thread([&]() {
     PacketPtr packet = pb->Create();
     while (true) {
       dev0 >> packet;
       if (packet->PacketIsOk()) {
-        uint16_t *seqPtr = (uint16_t *)packet->GetPayloadBuffer();
-        uint8_t *dstPtr = (uint8_t *)(seqPtr + 1);
-        uint8_t dst = *dstPtr & 0xf;
+        uint8_t *dstPtr = packet->GetPayloadBuffer();
         uint8_t src = (*dstPtr & 0xf0) >> 4;
+        uint8_t dst = *dstPtr & 0xf;
+        uint16_t *seqPtr = (uint16_t *)dstPtr + 1;
 
         for (auto route : routes) {
           if ((dst & route->mask) == route->addr) {

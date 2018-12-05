@@ -125,9 +125,9 @@ int main(int argc, char **argv) {
       std::cerr << "wrong rx packet type: "<< rxPktType << std::endl;
       return 1;
   }
-  uint16_t *seqPtr = (uint16_t *)(txPacket->GetPayloadBuffer());
-  uint8_t *dstPtr = (uint8_t*) (seqPtr + 1);
-  uint8_t *asciiMsg = dstPtr + 1;
+  uint8_t *dstPtr = txPacket->GetPayloadBuffer();
+  uint16_t *seqPtr = (uint16_t *)(dstPtr + 1);
+  uint8_t *asciiMsg = (uint8_t*) (seqPtr + 1);
   uint32_t msgSize = payloadSize - 2;
   uint8_t *maxPtr = asciiMsg + msgSize;
   char digit = '0';
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
       while (true) {
         node >> dlf;
         if (dlf->PacketIsOk()) {
-          uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
+          uint16_t *seqPtr = (uint16_t *)(dlf->GetPayloadBuffer()+1);
           log->Info("RX SEQ {} SIZE {}", *seqPtr, dlf->GetPacketSize());
         } else
           log->Warn("ERR");

@@ -173,6 +173,9 @@ target_link_libraries(example5 ${DCCOMMS_UTILS_GIT} cxxopts)
 add_executable (router-2 ${SRCPATH}main/router-2.cpp)
 target_link_libraries(router-2 ${DCCOMMS_UTILS_GIT} cxxopts)
 
+add_executable (btp ${SRCPATH}main/btp.cpp)
+target_link_libraries(btp ${DCCOMMS_UTILS_GIT} cxxopts)
+
 #install(TARGETS ${PROJECT_NAME} main
 #        LIBRARY DESTINATION "lib"
 #        RUNTIME DESTINATION "bin"
