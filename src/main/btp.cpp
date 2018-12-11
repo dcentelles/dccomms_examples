@@ -22,6 +22,8 @@ using namespace dccomms_packets;
 
 using namespace std::chrono;
 
+Ptr<Logger> Log;
+
 class BtpTime {
 public:
   typedef steady_clock clock;
@@ -58,7 +60,9 @@ enum BtpState {
   stability_max,
   look,
   increase_ipg,
-  slow_decrease
+  slow_decrease,
+  waitrtt,
+  reqrtt,
 };
 enum BtpMode { master, slave };
 
@@ -85,11 +89,14 @@ public:
 
   void BtpPayloadUpdated(const uint32_t &size);
 
+  void SetState(const BtpState &state);
+  BtpState GetState();
+
 private:
   uint8_t *_add;
   uint16_t *_seq;
   btpField *_et, *_rt, *_ipgReq;
-  uint8_t *_payload;
+  uint8_t *_payload, *_state;
   uint32_t _overhead;
 };
 
@@ -100,11 +107,15 @@ BtpPacket::BtpPacket() {
   _et = (btpField *)(_seq + 1);
   _rt = _et + 1;
   _ipgReq = _rt + 1;
-  _payload = (uint8_t *)(_ipgReq + 1);
+  _state = (uint8_t *)_ipgReq + 1;
+  _payload = _state + 1;
 
-  _overhead = 1 + 2 + sizeof(btpField) * 3;
+  _overhead = 1 + 2 + sizeof(btpField) * 3 + 1;
   VariableLengthPacket::PayloadUpdated(_overhead);
 }
+
+void BtpPacket::SetState(const BtpState &state) { *_state = state; }
+BtpState BtpPacket::GetState() { return static_cast<BtpState>(*_state); }
 
 void BtpPacket::SetDst(uint8_t add) { *_add = (*_add & 0xf0) | (add & 0xf); }
 uint8_t BtpPacket::GetDst() { return *_add & 0xf; }
@@ -129,6 +140,8 @@ void BtpPacket::BtpPayloadUpdated(const uint32_t &size) {
   PayloadUpdated(_overhead + size);
 }
 
+typedef std::shared_ptr<BtpPacket> BtpPacketPtr;
+
 class Btp {
 public:
   Btp();
@@ -139,11 +152,12 @@ public:
   void SetIpg(const uint32_t &ipg);
   void SetMaxIat(const uint32_t &iat);
   void SetMinIat(const uint32_t &iat);
-  void SetIat(const uint32_t &iat);
+  void ProcessRxPacket(const BtpPacketPtr &pkt);
   void SetMode(const BtpMode &mode);
   void SetDst(const uint8_t &dst);
   void SetSrc(const uint8_t &src);
-  void SetMinTr(const uint32_t &tr);
+  void SetMinTr(const uint64_t &tr);
+  void SetTrCount(const uint32_t &count);
 
   BtpState GetState();
   BtpMode GetMode();
@@ -155,28 +169,181 @@ public:
   uint8_t GetSrc();
   uint8_t GetDst();
   uint16_t GetEseq();
-  uint32_t GetMinTr();
+  uint64_t GetMinTr();
+  uint64_t GetLastTr();
+  uint64_t GetTr();
 
-  uint16_t UpdateEseq(const uint16_t &seq);
+  void WaitForNextPacket();
+
+  bool RttInit;
+  bool StartRttInit();
+
+  void RunTx();
+  void RunRx();
+
+  void SetTxDevName(const string &name) { _txDevName = name; }
+  void SetRxDevName(const string &name) { _rxDevName = name; }
 
 private:
   void _SetInitialIpg();
-  void _SetInitialPeerIpg();
-  BtpState _btpState;
-  uint32_t _peerIpg, _ipg, _maxIat, _minIat, _iat, _minTr;
+  void _SetInitialReqIpg();
+  void _InitTr();
+  BtpState _btpState, _peerBtpState;
+  uint32_t _reqIpg, _ipg, _maxIat, _minIat, _iat, _trCount, _lastPeerEt,
+      _peerIpg;
+  int64_t _lastTr, _newTr, _minTr;
   BtpMode _btpMode;
   uint8_t _src, _dst;
   uint16_t _eseq = 0;
+  std::list<int64_t> _iats, _trs;
+  uint64_t t0, t1;
+  bool _pktRcv;
+  std::mutex _pktRcv_mutex;
+  std::condition_variable _pktRcv_cond;
+  Ptr<VariableLengthPacketBuilder> _rxPb, _txPb;
+  Ptr<CommsDeviceService> _rxDev, _txDev;
+  string _txDevName, _rxDevName;
 };
 
 Btp::Btp() {}
 void Btp::Init() {
   _SetInitialIpg();
-  _SetInitialPeerIpg();
+  _SetInitialReqIpg();
+  _InitTr();
+  t0 = BtpTime::GetMillis();
+  _lastPeerEt = 0;
+  _peerIpg = 0;
+  _pktRcv = false;
+  _btpState = reqrtt;
+  RttInit = false;
+
+  _rxPb = CreateObject<VariableLengthPacketBuilder>();
+  _txPb = CreateObject<VariableLengthPacketBuilder>();
+
+  _txDev = CreateObject<CommsDeviceService>(_txPb);
+  _txDev->SetCommsDeviceId(_txDevName);
+  _txDev->Start();
+
+  if (_txDevName == _rxDevName) {
+    _rxDev = _txDev;
+  } else {
+    _rxDev = CreateObject<CommsDeviceService>(_rxPb);
+    _rxDev->SetCommsDeviceId(_rxDevName);
+    _rxDev->Start();
+  }
+}
+
+bool Btp::StartRttInit() {
+  BtpPacketPtr pkt = CreateObject<BtpPacket>();
+  _peerBtpState = look;
+  while (_peerBtpState != waitrtt) {
+      pkt->SetState(reqrtt);
+      pkt->SetIpgReq(GetPeerIpg());
+      pkt->SetEt(BtpTime::GetMillis());
+      pkt->SetDst(GetDst());
+      pkt->SetSrc(GetSrc());
+      pkt->UpdateSeq();
+      _txDev << pkt;
+      //WaitForNextPacket(6000);
+  }
+
+  return true;
+}
+
+void Btp::RunTx() {
+  /*
+   * Este  proceso  se  encarga  de  dirigir  el  envió  de  paquetes.  El
+  reloj  cuenta  de  forma descendiente desde un valor establecido y cuando
+  llega a cero, rellena la cabecera del paquete BTP  para  después  enviar
+  el  paquete  a  su  destino.  Tras  enviar  el  paquete,  el  reloj vuelve
+  a inicializarse  al  valor  propuesto  por  el  receptor  de  nuestros
+  paquetes.  Este  valor  será  el  IPG propuesto en el campo “IPG Request”
+  de la cabecera del protocolo BTP.
+     */
+
+  BtpPacketPtr pkt = CreateObject<BtpPacket>();
+  pkt->SetSeq(0);
+
+  while (1) {
+    while (!RttInit)
+      StartRttInit();
+
+    pkt->SetIpgReq(GetPeerIpg());
+    pkt->SetEt(BtpTime::GetMillis());
+    pkt->SetDst(GetDst());
+    pkt->SetSrc(GetSrc());
+    pkt->UpdateSeq();
+    pkt->UpdateFCS();
+    _txDev << pkt;
+    Log->Info("TX PKT {}  SEQ {}  RIPG {}", pkt->GetPacketSize(), pkt->GetSeq(),
+              pkt->GetIpgReq());
+    std::this_thread::sleep_for(chrono::milliseconds(GetIpg()));
+  }
+}
+
+void Btp::RunRx() {
+  /*
+   * Este proceso se encara de recibir los paquetes y
+   * de actualizar el IPG, el IAT y la DST ADDR.
+   */
+  uint32_t npkts = 0;
+  BtpPacketPtr pkt = CreateObject<BtpPacket>();
+  while (1) {
+    _rxDev >> pkt;
+    if (pkt->PacketIsOk()) {
+      npkts += 1;
+      ProcessRxPacket(pkt);
+    }
+  }
+}
+
+void Btp::WaitForNextPacket() {
+  std::unique_lock<std::mutex> lock(_pktRcv_mutex);
+  _pktRcv = false;
+  while (!_pktRcv)
+    _pktRcv_cond.wait(lock);
 }
 
 uint16_t Btp::GetEseq() { return _eseq; }
-uint16_t Btp::UpdateEseq(const uint16_t &seq) {
+
+void Btp::SetTrCount(const uint32_t &count) { _trCount = count; }
+
+uint64_t Btp::GetLastTr() { return _lastTr; }
+
+uint64_t Btp::GetTr() {}
+
+void Btp::SetMinTr(const uint64_t &tr) { _minTr = tr; }
+
+uint64_t Btp::GetMinTr() { return _minTr; }
+
+void Btp::SetDst(const uint8_t &addr) { _dst = addr; }
+
+void Btp::SetSrc(const uint8_t &addr) { _src = addr; }
+
+uint8_t Btp::GetSrc() { return _src; }
+
+uint8_t Btp::GetDst() { return _dst; }
+
+void Btp::_InitTr() {
+  _lastTr = _minTr;
+  _newTr = _minTr;
+}
+void Btp::_SetInitialIpg() {
+  if (GetMode() == master)
+    _ipg = 2 * _maxIat;
+}
+void Btp::_SetInitialReqIpg() { _reqIpg = _ipg; }
+
+void Btp::SetState(const BtpState &state) { _btpState = state; }
+void Btp::SetPeerIpg(const uint32_t &ipg) { _reqIpg = ipg; }
+
+void Btp::SetIpg(const uint32_t &ipg) { _ipg = ipg; }
+void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) {
+  t1 = BtpTime::GetMillis();
+  int64_t iat = static_cast<int64_t>(t1 - t0);
+  t0 = BtpTime::GetMillis();
+
+  auto seq = pkt->GetSeq();
   if (seq == _eseq) {
     _eseq += 1;
     // Update IPGPropouse
@@ -188,32 +355,55 @@ uint16_t Btp::UpdateEseq(const uint16_t &seq) {
     _eseq = seq + 1;
     // Do nothing
   }
-  return _eseq;
+  _iats.push_back(iat);
+  if (_iats.size() > _trCount)
+    _iats.pop_front();
+
+  _iat = 0;
+  for (auto tiat : _iats) {
+    _iat += tiat;
+  }
+  _iat = static_cast<uint32_t>(
+      std::round(static_cast<double>(_iat) / _iats.size()));
+
+  _trs.push_back(_newTr);
+  if (_trs.size() > _trCount)
+    _trs.pop_front();
+
+  _lastTr = 0;
+  for (auto t : _trs) {
+    _lastTr += t;
+  }
+
+  _lastTr = static_cast<int64_t>(
+      std::round(static_cast<double>(_lastTr) / _trs.size()));
+
+  uint32_t et = pkt->GetEt();
+  _lastPeerEt = et;
+
+  _peerIpg = et - _lastPeerEt;
+
+  int64_t over = _iat - _peerIpg;
+  int64_t newTr = over + _lastTr;
+  _newTr = newTr;
+
+  SetIpg(pkt->GetIpgReq());
+
+  if (GetMode() == slave) {
+    SetDst(pkt->GetSrc());
+  }
+
+  Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PIPG {}  TR {}  PINIT {}",
+            pkt->GetPacketSize(), iat, _iat, pkt->GetIpgReq(), _peerIpg,
+            _newTr);
+
+  _peerBtpState = pkt->GetState();
+  _pktRcv_mutex.lock();
+  _pktRcv = true;
+  _pktRcv_mutex.unlock();
+  _pktRcv_cond.notify_all();
 }
 
-void Btp::SetMinTr(const uint32_t &tr) { _minTr = tr; }
-
-uint32_t Btp::GetMinTr() { return _minTr; }
-
-void Btp::SetDst(const uint8_t &addr) { _dst = addr; }
-
-void Btp::SetSrc(const uint8_t &addr) { _src = addr; }
-
-uint8_t Btp::GetSrc() { return _src; }
-
-uint8_t Btp::GetDst() { return _dst; }
-
-void Btp::_SetInitialIpg() {
-  if (GetMode() == master)
-    _ipg = 2 * _maxIat;
-}
-void Btp::_SetInitialPeerIpg() { _peerIpg = _ipg; }
-
-void Btp::SetState(const BtpState &state) { _btpState = state; }
-void Btp::SetPeerIpg(const uint32_t &ipg) { _peerIpg = ipg; }
-
-void Btp::SetIpg(const uint32_t &ipg) { _ipg = ipg; }
-void Btp::SetIat(const uint32_t &iat) { _iat = iat; }
 void Btp::SetMaxIat(const uint32_t &iat) { _maxIat = iat; }
 void Btp::SetMinIat(const uint32_t &iat) { _minIat = iat; }
 void Btp::SetMode(const BtpMode &mode) { _btpMode = mode; }
@@ -224,13 +414,11 @@ uint32_t Btp::GetIat() { return _iat; }
 uint32_t Btp::GetMaxIat() { return _maxIat; }
 uint32_t Btp::GetMinIat() { return _minIat; }
 uint32_t Btp::GetIpg() { return _ipg; }
-uint32_t Btp::GetPeerIpg() { return _peerIpg; }
-
-typedef std::shared_ptr<BtpPacket> BtpPacketPtr;
+uint32_t Btp::GetPeerIpg() { return _reqIpg; }
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName, btpModeStr = "slave";
-  uint32_t add = 1, dstadd = 2, maxIat, minIat;
+  uint32_t add = 1, dstadd = 2, maxIat, minIat, minTr, trCount;
   uint64_t msStart = 0;
   bool flush = false, syncLog = false;
   try {
@@ -262,7 +450,11 @@ int main(int argc, char **argv) {
         "maxiat", "BTP max. IAT (ms)",
         cxxopts::value<uint32_t>(maxIat)->default_value("2000"))(
         "miniat", "BTP min. IAT (ms)",
-        cxxopts::value<uint32_t>(maxIat)->default_value("100"));
+        cxxopts::value<uint32_t>(minIat)->default_value("100"))(
+        "mintr", "BTP minimum end to end delay from peer (ms)",
+        cxxopts::value<uint32_t>(minTr)->default_value("2000"))(
+        "trcount", "BTP tr and iat counter for mean (ms)",
+        cxxopts::value<uint32_t>(trCount)->default_value("4"));
 
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -288,123 +480,51 @@ int main(int argc, char **argv) {
   auto logFormatter =
       std::make_shared<spdlog::pattern_formatter>("%D %T.%F %v");
   LogLevel logLevel = cpplogging::GetLevelFromString(logLevelStr);
-  Ptr<Logger> log = CreateObject<Logger>();
+  Log = CreateObject<Logger>();
   if (logFile != "") {
-    log->LogToFile(logFile);
+    Log->LogToFile(logFile);
   }
-  log->SetLogLevel(logLevel);
-  log->SetLogName(nodeName);
-  log->SetLogFormatter(logFormatter);
+  Log->SetLogLevel(logLevel);
+  Log->SetLogName(nodeName);
+  Log->SetLogFormatter(logFormatter);
 
   if (flush) {
-    log->FlushLogOn(info);
-    log->Info("Flush log on info");
+    Log->FlushLogOn(info);
+    Log->Info("Flush log on info");
   }
 
   if (!syncLog) {
-    log->SetAsyncMode();
-    log->Info("Async. log");
+    Log->SetAsyncMode();
+    Log->Info("Async. log");
   }
-
-  std::thread send, timeOut, iPGPropose, receive;
 
   Btp btp;
   btp.SetMode(mode);
+  btp.SetMinTr(minTr);
   btp.SetMaxIat(maxIat);
   btp.SetMinIat(minIat);
-  btp.SetIpg(btp.GetMaxIat() * 2);
-  btp.SetPeerIpg(btp.GetIpg());
+  btp.SetTrCount(trCount);
   btp.SetDst(dstadd);
   btp.SetSrc(add);
+  btp.SetTxDevName(nodeName);
+  btp.SetRxDevName(nodeName);
 
-  std::mutex btpLock;
-  std::condition_variable pktRcvCond;
-  bool pktReceived = false;
+  btp.Init();
 
-  Ptr<VariableLengthPacketBuilder> pb =
-      CreateObject<VariableLengthPacketBuilder>();
-  Ptr<CommsDeviceService> dev = CreateObject<CommsDeviceService>(pb);
-  dev->SetCommsDeviceId(nodeName);
-  dev->Start();
+  std::thread send, timeOut, iPGPropose, receive;
 
-  send = std::thread([&]() {
-    BtpPacketPtr pkt = CreateObject<BtpPacket>();
-    pkt->SetSeq(0);
-    while (1) {
-      // TODO:
-      /*
-       * Este  proceso  se  encarga  de  dirigir  el  envió  de  paquetes.  El
-      reloj  cuenta  de  forma descendiente desde un valor establecido y cuando
-      llega a cero, rellena la cabecera del paquete BTP  para  después  enviar
-      el  paquete  a  su  destino.  Tras  enviar  el  paquete,  el  reloj vuelve
-      a inicializarse  al  valor  propuesto  por  el  receptor  de  nuestros
-      paquetes.  Este  valor  será  el  IPG propuesto en el campo “IPG Request”
-      de la cabecera del protocolo BTP.
-       */
-      pkt->SetIpgReq(btp.GetPeerIpg());
-      pkt->SetEt(BtpTime::GetMillis());
-      pkt->SetDst(btp.GetDst());
-      pkt->SetSrc(btp.GetSrc());
-      pkt->UpdateSeq();
-      //...
-      pkt->UpdateFCS();
-      dev << pkt;
-      log->Info("TX PKT {}  SEQ {}  RIPG {}", pkt->GetPacketSize(),
-                pkt->GetSeq(), pkt->GetIpgReq());
-      std::this_thread::sleep_for(chrono::milliseconds(btp.GetIpg()));
-    }
-  });
+  send = std::thread([&]() { btp.RunTx(); });
 
-  receive = std::thread([&]() {
-    /*
-     * Este proceso se encara de recibir los paquetes y
-     * de actualizar el IPG, el IAT y la DST ADDR.
-     */
-    uint32_t npkts = 0;
-    uint32_t iat, liat;
-    std::list<uint32_t> iats;
-    BtpPacketPtr pkt = CreateObject<BtpPacket>();
-    uint64_t t0, t1;
-    t0 = BtpTime::GetMillis();
-    while (1) {
-      dev >> pkt;
-      if (pkt->PacketIsOk()) {
-        npkts += 1;
-        t1 = BtpTime::GetMillis();
-        liat = static_cast<uint32_t>(t1 - t0);
-        iats.push_back(liat);
-        if (iats.size() > 10)
-          iats.pop_front();
-        iat = 0;
-        for (auto tiat : iats) {
-          iat += tiat;
-        }
-        iat /= iats.size();
-        btp.SetIat(iat);
-        if (btp.GetMode() == slave) {
-          btp.SetDst(pkt->GetSrc());
-        }
-        btp.SetIpg(pkt->GetIpgReq());
-        btp.UpdateEseq(pkt->GetSeq());
-        log->Info("RX - PKT {}  LIAT {}  IAT {}  RIPG {}", pkt->GetPacketSize(),
-                  liat, iat, pkt->GetIpgReq());
-        pktRcvCond.notify_all();
-      }
-    }
-  });
+  receive = std::thread([&]() { btp.RunRx(); });
 
-  timeOut = std::thread([&]() {
+  timeOut = std::thread([&]() {});
 
-  });
-
-  iPGPropose = std::thread([&]() {
-
-  });
+  iPGPropose = std::thread([&]() {});
 
   SignalManager::SetLastCallback(SIGINT, [&](int sig) {
     printf("Received %d signal.\nFlushing log messages...", sig);
     fflush(stdout);
-    log->FlushLog();
+    Log->FlushLog();
     Utils::Sleep(2000);
     printf("Log messages flushed.\n");
     exit(0);

@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
   dev1Rx = std::thread([&]() {
     PacketPtr packet = pb->Create();
     while (true) {
-      dev0 >> packet;
+      dev1 >> packet;
       if (packet->PacketIsOk()) {
         uint8_t *dstPtr = packet->GetPayloadBuffer();
         uint8_t src = (*dstPtr & 0xf0) >> 4;
