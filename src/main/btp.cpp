@@ -208,8 +208,9 @@ public:
     std::unique_lock<std::mutex> lock(_pktRcv_mutex);
     _pktRcv = false;
     auto res = _pktRcv_cond.wait_for(lock, t);
-    BtpPacketPtr pkt = CreateObject<BtpPacket>();
+    BtpPacketPtr pkt;
     if (_pktRcv) {
+      pkt = CreateObject<BtpPacket>();
       pkt->CopyFromRawBuffer(_lastRxPkt->GetBuffer());
     }
     return pkt;
@@ -345,28 +346,48 @@ bool Btp::StartRttInit() {
         if (peerState == req_peerrttinit) {
           SendBtpMsg(req_peerrttinit_ack);
           Log->Info("SEND req_peerrttinit_ack");
+        } else if (peerState == req_waitrtt) {
+          if (GetMode() == slave) {
+            SendBtpMsg(req_waitrtt_ack);
+            Log->Info("SEND req_waitrtt_ack");
+            SetState(waitrtt);
+            return false;
+          }
         }
       } else {
         Log->Warn("TIMEOUT REQ WAITRTT");
       }
     }
-    FlushInput();
     int rtts = 0, rttsReq = 4;
     rttMillis = 0;
     while (rtts < rttsReq) {
+      FlushInput();
       auto t0 = BtpTime::GetMillis();
       SendBtpMsg(req_rtt);
       Log->Info("SEND req_rtt");
       auto res = WaitForNextPacket(std::chrono::milliseconds(5000));
-      peerState = res->GetState();
-      if (res && peerState == req_rtt_ack) {
-        auto t1 = BtpTime::GetMillis();
-        uint16_t lastRtt = static_cast<uint16_t>(t1 - t0);
-        rttMillis += lastRtt;
-        rtts += 1;
-        Log->Info("LRTT: {} ms  RTT: {} ms  COUNT: {}", lastRtt,
-                  rttMillis / rtts, rtts);
+      if (res) {
+        peerState = res->GetState();
+        if (peerState == req_rtt_ack) {
+          auto t1 = BtpTime::GetMillis();
+          uint16_t lastRtt = static_cast<uint16_t>(t1 - t0);
+          rttMillis += lastRtt;
+          rtts += 1;
+          Log->Info("LRTT: {} ms  RTT: {} ms  COUNT: {}", lastRtt,
+                    rttMillis / rtts, rtts);
+        } else if (peerState == req_peerrttinit) {
+          SendBtpMsg(req_peerrttinit_ack);
+          Log->Info("SEND req_peerrttinit_ack");
+          SetState(init_rtt);
+          return false;
+        } else if (peerState == req_waitrtt) {
+          SendBtpMsg(req_waitrtt_ack);
+          Log->Info("SEND req_waitrtt_ack");
+          SetState(waitrtt);
+          return false;
+        }
       } else {
+
         Log->Warn("RTTREQ TIMEOUT");
       }
     }
@@ -475,19 +496,26 @@ void Btp::RunTx() {
       Log->Info("SEND req_peerrttinit");
       pktrecv = WaitForNextPacket(chrono::seconds(5));
       if (pktrecv) {
-        if (pktrecv->GetState() == req_peerrttinit_ack) {
+        auto state = pktrecv->GetState();
+        if (state == req_peerrttinit_ack) {
           SetState(waitrtt);
+        } else if (state == req_peerrttinit) {
+          if (GetMode() == master) {
+            SendBtpMsg(req_peerrttinit_ack);
+            Log->Info("SEND req_peerrttinit_ack");
+            SetState(init_rtt);
+          }
         } else {
-          Log->Warn("EXPECTED PEERRTTINIT ACK PKT");
+          Log->Warn("EXPECTED req_peerrttinit_ack OR req_peerrttinit");
         }
       } else {
-        Log->Warn("TIMEOUT WAITING FOR PEERRTTINIT REQ ACK");
+        Log->Warn("TIMEOUT WAITING FOR req_peerrttinit_ack");
       }
       break;
     }
     case vague: {
       pktrecv = WaitForNextPacket(chrono::seconds(5));
-      if (pktrecv->GetState() == req_waitrtt) {
+      if (pktrecv && pktrecv->GetState() == req_waitrtt) {
         SetState(waitrtt);
       } else {
         SendBtpMsg(req_peerrttinit);
