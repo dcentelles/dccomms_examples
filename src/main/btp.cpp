@@ -61,14 +61,29 @@ enum BtpState {
   look,
   increase_ipg,
   slow_decrease,
+  req_rtt_ack,
+  req_rtt,
+  req_waitrtt,
+  req_waitrtt_ack,
+  req_peerrttinit,
+  req_peerrttinit_ack,
   waitrtt,
-  reqrtt,
+  wait_waitrtt,
+  init_rtt,
+  vague,
+  unknown,
+  slaveinit,
+  slaveinit_ack,
+  wait_req_peerrttinit
 };
 enum BtpMode { master, slave };
 
 class BtpPacket : public VariableLengthPacket {
 public:
   typedef uint32_t btpField;
+  typedef uint16_t btpStateFieldType;
+  typedef uint16_t btpFlagsFieldType;
+
   BtpPacket();
   void SetDst(uint8_t add);
   void SetSrc(uint8_t add);
@@ -91,13 +106,20 @@ public:
 
   void SetState(const BtpState &state);
   BtpState GetState();
+  void SetInitFlag(bool v) {
+    *_flags = v ? *_flags | INIT_F : *_flags & ~INIT_F;
+  }
+  bool GetInitFlag() { return *_flags & INIT_F; }
 
 private:
   uint8_t *_add;
   uint16_t *_seq;
   btpField *_et, *_rt, *_ipgReq;
-  uint8_t *_payload, *_state;
+  uint8_t *_payload;
+  btpStateFieldType *_state;
   uint32_t _overhead;
+  btpFlagsFieldType *_flags;
+  static const btpStateFieldType INIT_F = 0x8000;
 };
 
 BtpPacket::BtpPacket() {
@@ -107,10 +129,12 @@ BtpPacket::BtpPacket() {
   _et = (btpField *)(_seq + 1);
   _rt = _et + 1;
   _ipgReq = _rt + 1;
-  _state = (uint8_t *)_ipgReq + 1;
-  _payload = _state + 1;
+  _state = (btpStateFieldType *)(_ipgReq + 1);
+  _flags = (btpFlagsFieldType *)(_state + 1);
+  _payload = (uint8_t *)(_state + 1);
 
-  _overhead = 1 + 2 + sizeof(btpField) * 3 + 1;
+  _overhead = 1 + 2 + sizeof(btpField) * 3 + sizeof(btpStateFieldType) +
+              sizeof(btpFlagsFieldType);
   VariableLengthPacket::PayloadUpdated(_overhead);
 }
 
@@ -173,7 +197,23 @@ public:
   uint64_t GetLastTr();
   uint64_t GetTr();
 
-  void WaitForNextPacket();
+  void SetPeerInit(bool v) { _peerInit = v; }
+  bool GetPeerInit() { return _peerInit; }
+
+  BtpPacketPtr WaitForNextPacket();
+  void UpdateWorkState(const BtpPacketPtr &pkt);
+
+  template <class Rep, class Period>
+  BtpPacketPtr WaitForNextPacket(const std::chrono::duration<Rep, Period> &t) {
+    std::unique_lock<std::mutex> lock(_pktRcv_mutex);
+    _pktRcv = false;
+    auto res = _pktRcv_cond.wait_for(lock, t);
+    BtpPacketPtr pkt = CreateObject<BtpPacket>();
+    if (_pktRcv) {
+      pkt->CopyFromRawBuffer(_lastRxPkt->GetBuffer());
+    }
+    return pkt;
+  }
 
   bool RttInit;
   bool StartRttInit();
@@ -183,6 +223,60 @@ public:
 
   void SetTxDevName(const string &name) { _txDevName = name; }
   void SetRxDevName(const string &name) { _rxDevName = name; }
+
+  void FlushInput() {
+    // Clean input fifo
+    auto pkt = _rxPb->Create();
+    while (_rxDev->GetRxFifoSize() > 0) {
+      _rxDev >> pkt;
+    }
+  }
+
+  //  BtpPacketPtr GetLastRxPacket() {
+  //    _pktRcv_mutex.lock();
+  //    auto pkt = dynamic_pointer_cast<BtpPacket>(
+  //        _rxPb->CreateFromBuffer(_lastRxPkt->GetBuffer()));
+  //    _pktRcv_mutex.unlock();
+  //    return pkt;
+  //  }
+
+  void SetLastRxPacket(const BtpPacketPtr &pkt) {
+    _pktRcv_mutex.lock();
+    _lastRxPkt = pkt;
+    _peerBtpState = pkt->GetState();
+    _peerInit = pkt->GetInitFlag();
+    _pktRcv = true;
+
+    if (GetMode() == slave) {
+      SetDst(pkt->GetSrc());
+    }
+
+    //    switch (_peerBtpState) {
+    //    default:
+    //      break;
+    //    }
+    //    if (_peerInit && RttInit) {
+    //      if (GetState() == req_rtt_ack || GetState() == req_rtt)
+    //        SetState(look);
+    //      if (_peerBtpState != req_rtt_ack && _peerBtpState != req_rtt)
+    //        UpdateWorkState(pkt);
+    //    }
+
+    _pktRcv_mutex.unlock();
+    _pktRcv_cond.notify_all();
+  }
+
+  void SendBtpMsg(const BtpState &state) {
+    _txPkt->SetEt(BtpTime::GetMillis());
+    _txPkt->SetDst(GetDst());
+    _txPkt->SetSrc(GetSrc());
+    _txPkt->SetIpgReq(GetPeerIpg());
+    _txPkt->SetState(state);
+    _txPkt->UpdateSeq();
+    _txPkt->SetInitFlag(RttInit);
+    _txPkt->UpdateFCS();
+    _txDev << _txPkt;
+  }
 
 private:
   void _SetInitialIpg();
@@ -197,12 +291,15 @@ private:
   uint16_t _eseq = 0;
   std::list<int64_t> _iats, _trs;
   uint64_t t0, t1;
-  bool _pktRcv;
+  bool _pktRcv, _peerInit;
   std::mutex _pktRcv_mutex;
   std::condition_variable _pktRcv_cond;
   Ptr<VariableLengthPacketBuilder> _rxPb, _txPb;
   Ptr<CommsDeviceService> _rxDev, _txDev;
   string _txDevName, _rxDevName;
+
+  PacketPtr _flushPkt;
+  BtpPacketPtr _lastRxPkt, _txPkt;
 };
 
 Btp::Btp() {}
@@ -214,11 +311,19 @@ void Btp::Init() {
   _lastPeerEt = 0;
   _peerIpg = 0;
   _pktRcv = false;
-  _btpState = reqrtt;
+  _btpState = req_rtt;
   RttInit = false;
+  _peerInit = false;
+  _btpState = vague;
+  _peerBtpState = vague;
 
   _rxPb = CreateObject<VariableLengthPacketBuilder>();
   _txPb = CreateObject<VariableLengthPacketBuilder>();
+
+  _flushPkt = _rxPb->Create();
+  _txPkt = CreateObject<BtpPacket>();
+  _lastRxPkt = CreateObject<BtpPacket>();
+  _txPkt->SetSeq(0);
 
   _txDev = CreateObject<CommsDeviceService>(_txPb);
   _txDev->SetCommsDeviceId(_txDevName);
@@ -231,23 +336,64 @@ void Btp::Init() {
     _rxDev->SetCommsDeviceId(_rxDevName);
     _rxDev->Start();
   }
+
+  FlushInput();
 }
 
 bool Btp::StartRttInit() {
   BtpPacketPtr pkt = CreateObject<BtpPacket>();
-  _peerBtpState = look;
-  while (_peerBtpState != waitrtt) {
-      pkt->SetState(reqrtt);
-      pkt->SetIpgReq(GetPeerIpg());
-      pkt->SetEt(BtpTime::GetMillis());
-      pkt->SetDst(GetDst());
-      pkt->SetSrc(GetSrc());
-      pkt->UpdateSeq();
-      _txDev << pkt;
-      //WaitForNextPacket(6000);
-  }
+  uint16_t rttMillis = UINT16_MAX;
 
-  return true;
+  BtpState peerState = unknown;
+  while (rttMillis == UINT16_MAX) {
+    while (peerState != req_waitrtt_ack) {
+      SendBtpMsg(req_waitrtt);
+
+      Log->Info("SEND REQ WAITRTT");
+      auto res = WaitForNextPacket(std::chrono::milliseconds(5000));
+      if (res)
+        peerState = res->GetState();
+      else {
+        Log->Warn("TIMEOUT REQ WAITRTT");
+      }
+    }
+    FlushInput();
+    int rtts = 0, rttsReq = 4;
+    rttMillis = 0;
+    while (rtts < rttsReq) {
+      auto t0 = BtpTime::GetMillis();
+      SendBtpMsg(req_rtt);
+      Log->Info("SEND RTTREQ");
+      auto res = WaitForNextPacket(std::chrono::milliseconds(5000));
+      peerState = res->GetState();
+      if (res && peerState == req_rtt_ack) {
+        auto t1 = BtpTime::GetMillis();
+        uint16_t lastRtt = static_cast<uint16_t>(t1 - t0);
+        rttMillis += lastRtt;
+        rtts += 1;
+        Log->Info("LRTT: {} ms  RTT: {} ms  COUNT: {}", lastRtt,
+                  rttMillis / rtts, rtts);
+      } else {
+        Log->Warn("RTTREQ TIMEOUT");
+      }
+    }
+    if (rtts == rttsReq) {
+      rttMillis /= rtts;
+      SetIpg(rttMillis * 2);
+      SetPeerIpg(GetIpg());
+      SetMinTr(static_cast<uint16_t>(rttMillis / 1.5));
+      RttInit = true;
+      if (GetMode() == master) {
+        SetState(req_peerrttinit);
+      } else {
+        SetState(slaveinit);
+      }
+    } else {
+      RttInit = false;
+      rttMillis = UINT16_MAX;
+    }
+  }
+  return RttInit;
 }
 
 void Btp::RunTx() {
@@ -261,29 +407,116 @@ void Btp::RunTx() {
   de la cabecera del protocolo BTP.
      */
 
-  BtpPacketPtr pkt = CreateObject<BtpPacket>();
-  pkt->SetSeq(0);
+  BtpPacketPtr pktrecv;
 
   while (1) {
-    while (!RttInit)
-      StartRttInit();
+    if (!RttInit) {
+      Log->Info("RTT NOT INITILIZED");
+      if (GetMode() == master) {
+        Log->Info("MASTER: SET REQ WAITRTT");
+        SetState(init_rtt);
+      }
+    }
 
-    pkt->SetIpgReq(GetPeerIpg());
-    pkt->SetEt(BtpTime::GetMillis());
-    pkt->SetDst(GetDst());
-    pkt->SetSrc(GetSrc());
-    pkt->UpdateSeq();
-    pkt->UpdateFCS();
-    _txDev << pkt;
-    Log->Info("TX PKT {}  SEQ {}  RIPG {}", pkt->GetPacketSize(), pkt->GetSeq(),
-              pkt->GetIpgReq());
-    std::this_thread::sleep_for(chrono::milliseconds(GetIpg()));
+    switch (GetState()) {
+    case init_rtt: {
+      Log->Info("START RTT REQ RUTINE");
+      RttInit = StartRttInit();
+      break;
+    }
+    case waitrtt: {
+      Log->Info("WAIT RTT REQ");
+      pktrecv = WaitForNextPacket(chrono::seconds(5));
+      if (pktrecv) {
+        switch (pktrecv->GetState()) {
+
+        case req_rtt: {
+          SendBtpMsg(req_rtt_ack);
+          Log->Info("SEND req_rtt_ack {}", GetDst());
+          break;
+        }
+        case req_peerrttinit: {
+          SendBtpMsg(req_peerrttinit_ack);
+          //TODO: fix ack lost
+          SetState(init_rtt);
+          Log->Info("SEND req_peerrttinit_ack {}", GetDst());
+          break;
+        }
+        case req_waitrtt: {
+          SendBtpMsg(req_waitrtt_ack);
+          Log->Info("SEND req_waitrtt_ack {}", GetDst());
+          break;
+        }
+        case slaveinit:{
+            SendBtpMsg(slaveinit_ack);
+            //TODO: fix ack lost
+            SetState(look);
+        }
+        }
+      } else {
+        if (GetMode() == master) {
+          Log->Warn("TIMEOUT WAITING FOR REQRTT. REQ PEERRTTINIT (MASTER)");
+          SetState(req_peerrttinit);
+        } else {
+          Log->Warn("TIMEOUT WAITING FOR REQRTT.");
+        }
+      }
+      break;
+    }
+    case slaveinit: {
+      Log->Info("SLAVE INIT");
+      SendBtpMsg(slaveinit);
+      pktrecv = WaitForNextPacket(chrono::seconds(5));
+      if (pktrecv) {
+        if (pktrecv->GetState() == slaveinit_ack) {
+          SetState(look);
+        } else {
+          Log->Warn("EXPECTED slaveinit_ack PKT");
+        }
+      } else {
+        Log->Warn("TIMEOUT WAITING FOR slaveinit_ack ACK");
+      }
+      break;
+    }
+    case req_peerrttinit: {
+      Log->Info("REQ PEER RTT INIT");
+      SendBtpMsg(req_peerrttinit);
+      pktrecv = WaitForNextPacket(chrono::seconds(5));
+      if (pktrecv) {
+        if (pktrecv->GetState() == req_peerrttinit_ack) {
+          SetState(waitrtt);
+        } else {
+          Log->Warn("EXPECTED PEERRTTINIT ACK PKT");
+        }
+      } else {
+        Log->Warn("TIMEOUT WAITING FOR PEERRTTINIT REQ ACK");
+      }
+      break;
+    }
+    case vague: {
+      pktrecv = WaitForNextPacket(chrono::seconds(5));
+      if (_peerBtpState == req_waitrtt) {
+        Log->Info("SEND WAITRTT ACK");
+        SetState(waitrtt);
+      }
+      std::this_thread::sleep_for(chrono::milliseconds(1000));
+      break;
+    }
+    default: {
+      SendBtpMsg(GetState());
+      Log->Info("TX PKT {}  SEQ {}  IPG {}  RIPG {}  MINTR {}",
+                _txPkt->GetPacketSize(), _txPkt->GetSeq(), GetIpg(),
+                _txPkt->GetIpgReq(), GetMinTr());
+      std::this_thread::sleep_for(chrono::milliseconds(GetIpg()));
+      break;
+    }
+    }
   }
 }
 
 void Btp::RunRx() {
   /*
-   * Este proceso se encara de recibir los paquetes y
+   * Este proceso se encarga de recibir los paquetes y
    * de actualizar el IPG, el IAT y la DST ADDR.
    */
   uint32_t npkts = 0;
@@ -297,11 +530,13 @@ void Btp::RunRx() {
   }
 }
 
-void Btp::WaitForNextPacket() {
+BtpPacketPtr Btp::WaitForNextPacket() {
   std::unique_lock<std::mutex> lock(_pktRcv_mutex);
   _pktRcv = false;
   while (!_pktRcv)
     _pktRcv_cond.wait(lock);
+  return dynamic_pointer_cast<BtpPacket>(
+      _rxPb->CreateFromBuffer(_lastRxPkt->GetBuffer()));
 }
 
 uint16_t Btp::GetEseq() { return _eseq; }
@@ -338,7 +573,8 @@ void Btp::SetState(const BtpState &state) { _btpState = state; }
 void Btp::SetPeerIpg(const uint32_t &ipg) { _reqIpg = ipg; }
 
 void Btp::SetIpg(const uint32_t &ipg) { _ipg = ipg; }
-void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) {
+
+void Btp::UpdateWorkState(const BtpPacketPtr &pkt) {
   t1 = BtpTime::GetMillis();
   int64_t iat = static_cast<int64_t>(t1 - t0);
   t0 = BtpTime::GetMillis();
@@ -389,20 +625,12 @@ void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) {
 
   SetIpg(pkt->GetIpgReq());
 
-  if (GetMode() == slave) {
-    SetDst(pkt->GetSrc());
-  }
-
   Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PIPG {}  TR {}  PINIT {}",
             pkt->GetPacketSize(), iat, _iat, pkt->GetIpgReq(), _peerIpg,
             _newTr);
-
-  _peerBtpState = pkt->GetState();
-  _pktRcv_mutex.lock();
-  _pktRcv = true;
-  _pktRcv_mutex.unlock();
-  _pktRcv_cond.notify_all();
 }
+
+void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) { SetLastRxPacket(pkt); }
 
 void Btp::SetMaxIat(const uint32_t &iat) { _maxIat = iat; }
 void Btp::SetMinIat(const uint32_t &iat) { _minIat = iat; }
