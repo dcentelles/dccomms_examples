@@ -505,8 +505,18 @@ void Btp::RunTx() {
             Log->Info("SEND req_peerrttinit_ack");
             SetState(init_rtt);
           }
+        } else if (state == slaveinit) {
+          // Si recibimos slaveinit aquí quiere decir que RttInit es True,
+          // que nosotros somos el master y que el esclavo ya ha calculado el
+          // RTT. Lo que podemos hacer aquí es obligarle a que lo vuelva a
+          // calcular con req_peerrttinit o reconocer su estado y empezar la
+          // ejecucion normal de BTP. Vamos a hacer lo último.
+          SendBtpMsg(slaveinit_ack);
+          Log->Info("SEND slaveinit_ack");
+          SetState(look);
         } else {
-          Log->Warn("EXPECTED req_peerrttinit_ack OR req_peerrttinit");
+          Log->Warn("EXPECTED req_peerrttinit_ack OR req_peerrttinit{}",
+                    GetMode() == master ? " OR slaveinit" : "");
         }
       } else {
         Log->Warn("TIMEOUT WAITING FOR req_peerrttinit_ack");
