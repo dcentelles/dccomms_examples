@@ -78,19 +78,19 @@ enum BtpState {
 };
 enum BtpMode { master, slave };
 
+typedef uint32_t btpField;
+typedef uint16_t btpStateFieldType;
+typedef uint16_t btpFlagsFieldType;
+
 class BtpPacket : public VariableLengthPacket {
 public:
-  typedef uint32_t btpField;
-  typedef uint16_t btpStateFieldType;
-  typedef uint16_t btpFlagsFieldType;
-
   BtpPacket();
   void SetDst(uint8_t add);
   void SetSrc(uint8_t add);
   void SetEt(const btpField &t);
   void SetRt(const btpField &r);
   void SetSeq(const uint16_t &seq);
-  void SetIpgReq(const btpField &ipg);
+  void SetReqIpg(const btpField &ipg);
 
   void UpdateSeq();
 
@@ -99,7 +99,7 @@ public:
   btpField GetEt();
   btpField GetRt();
   uint16_t GetSeq();
-  btpField GetIpgReq();
+  btpField GetReqIpg();
   uint8_t *GetBtpPayloadBuffer();
 
   void BtpPayloadUpdated(const uint32_t &size);
@@ -153,12 +153,12 @@ void BtpPacket::SetEt(const btpField &t) { *_et = t; }
 void BtpPacket::SetRt(const btpField &r) { *_rt = r; }
 void BtpPacket::SetSeq(const uint16_t &seq) { *_seq = seq; }
 void BtpPacket::UpdateSeq() { *_seq = *_seq + 1; }
-void BtpPacket::SetIpgReq(const btpField &ipg) { *_ipgReq = ipg; }
+void BtpPacket::SetReqIpg(const btpField &ipg) { *_ipgReq = ipg; }
 
-BtpPacket::btpField BtpPacket::GetEt() { return *_et; }
-BtpPacket::btpField BtpPacket::GetRt() { return *_rt; }
+btpField BtpPacket::GetEt() { return *_et; }
+btpField BtpPacket::GetRt() { return *_rt; }
 uint16_t BtpPacket::GetSeq() { return *_seq; }
-BtpPacket::btpField BtpPacket::GetIpgReq() { return *_ipgReq; }
+btpField BtpPacket::GetReqIpg() { return *_ipgReq; }
 uint8_t *BtpPacket::GetBtpPayloadBuffer() { return _payload; }
 void BtpPacket::BtpPayloadUpdated(const uint32_t &size) {
   PayloadUpdated(_overhead + size);
@@ -189,13 +189,15 @@ public:
   uint32_t GetMaxIat();
   uint32_t GetMinIat();
   uint32_t GetIpg();
-  uint32_t GetPeerIpg();
+  uint32_t GetReqIpg();
   uint8_t GetSrc();
   uint8_t GetDst();
   uint16_t GetEseq();
   uint64_t GetMinTr();
   uint64_t GetLastTr();
   uint64_t GetTr();
+  void SetRt(const btpField &v) { _rt = v; }
+  btpField GetRt() { return _rt; };
 
   void SetPeerInit(bool v) { _peerInit = v; }
   bool GetPeerInit() { return _peerInit; }
@@ -253,15 +255,20 @@ public:
     if (GetMode() == slave) {
       SetDst(pkt->GetSrc());
     }
+
+    if (pkt->GetState() < req_rtt_ack && GetState() < req_rtt_ack)
+      UpdateWorkState(pkt);
+
     _pktRcv_mutex.unlock();
     _pktRcv_cond.notify_all();
   }
 
   void SendBtpMsg(const BtpState &state) {
     _txPkt->SetEt(BtpTime::GetMillis());
+    _txPkt->SetRt(GetRt());
     _txPkt->SetDst(GetDst());
     _txPkt->SetSrc(GetSrc());
-    _txPkt->SetIpgReq(GetPeerIpg());
+    _txPkt->SetReqIpg(GetReqIpg());
     _txPkt->SetState(state);
     _txPkt->UpdateSeq();
     _txPkt->SetInitFlag(RttInit);
@@ -269,13 +276,21 @@ public:
     _txDev << _txPkt;
   }
 
+  void ReinitBtpVars() {
+    _firstPktRecv = false;
+    _lastPeerEt = 0;
+    _peerIpg = 0;
+    _lastTr = _minTr;
+  }
+
 private:
   void _SetInitialIpg();
   void _SetInitialReqIpg();
   void _InitTr();
   BtpState _btpState, _peerBtpState;
-  uint32_t _reqIpg, _ipg, _maxIat, _minIat, _iat, _trCount, _lastPeerEt,
+  int64_t _reqIpg, _ipg, _maxIat, _minIat, _iat, _trCount, _lastPeerEt,
       _peerIpg;
+  btpField _rt;
   int64_t _lastTr, _newTr, _minTr;
   BtpMode _btpMode;
   uint8_t _src, _dst;
@@ -291,6 +306,7 @@ private:
 
   PacketPtr _flushPkt;
   BtpPacketPtr _lastRxPkt, _txPkt;
+  bool _firstPktRecv;
 };
 
 Btp::Btp() {}
@@ -302,6 +318,7 @@ void Btp::Init() {
   _lastPeerEt = 0;
   _peerIpg = 0;
   _pktRcv = false;
+  _firstPktRecv = false;
   _btpState = req_rtt;
   RttInit = false;
   _peerInit = false;
@@ -395,8 +412,9 @@ bool Btp::StartRttInit() {
       rttMillis /= rtts;
       SetIpg(rttMillis * 2);
       SetPeerIpg(GetIpg());
-      SetMinTr(static_cast<uint16_t>(rttMillis / 1.5));
+      SetMinTr(static_cast<uint16_t>(rttMillis / 2));
       RttInit = true;
+      ReinitBtpVars();
       if (GetMode() == master) {
         SetState(req_peerrttinit);
       } else {
@@ -575,9 +593,8 @@ void Btp::RunTx() {
       }
       case look: {
         SendBtpMsg(GetState());
-        Log->Info("TX PKT {}  SEQ {}  IPG {}  RIPG {}  MINTR {}",
-                  _txPkt->GetPacketSize(), _txPkt->GetSeq(), GetIpg(),
-                  _txPkt->GetIpgReq(), GetMinTr());
+        Log->Info("TX PKT SEQ {}  IPG {}  RIPG {}  MINTR {}", _txPkt->GetSeq(),
+                  GetIpg(), _txPkt->GetReqIpg(), GetMinTr());
         std::this_thread::sleep_for(chrono::milliseconds(GetIpg()));
         break;
       }
@@ -659,6 +676,32 @@ void Btp::UpdateWorkState(const BtpPacketPtr &pkt) {
   int64_t iat = static_cast<int64_t>(t1 - t0);
   t0 = BtpTime::GetMillis();
 
+  int64_t et = pkt->GetEt();
+  _peerIpg = et - _lastPeerEt;
+  _lastPeerEt = et;
+
+  if (!_firstPktRecv) {
+    _trs.clear();
+    _iats.clear();
+    _lastTr = _minTr;
+    _trs.push_back(_lastTr);
+    _firstPktRecv = true;
+    Log->Info("FIRST RX - PKT {}  IPG {}  TR {}", pkt->GetSeq(),
+              pkt->GetReqIpg(), _newTr);
+    return;
+  }
+
+  _iats.push_back(iat);
+  if (_iats.size() > _trCount)
+    _iats.pop_front();
+
+  _iat = 0;
+  for (auto tiat : _iats) {
+    _iat += tiat;
+  }
+  _iat = static_cast<int64_t>(
+      std::round(static_cast<double>(_iat) / _iats.size()));
+
   auto seq = pkt->GetSeq();
   if (seq == _eseq) {
     _eseq += 1;
@@ -671,20 +714,6 @@ void Btp::UpdateWorkState(const BtpPacketPtr &pkt) {
     _eseq = seq + 1;
     // Do nothing
   }
-  _iats.push_back(iat);
-  if (_iats.size() > _trCount)
-    _iats.pop_front();
-
-  _iat = 0;
-  for (auto tiat : _iats) {
-    _iat += tiat;
-  }
-  _iat = static_cast<uint32_t>(
-      std::round(static_cast<double>(_iat) / _iats.size()));
-
-  _trs.push_back(_newTr);
-  if (_trs.size() > _trCount)
-    _trs.pop_front();
 
   _lastTr = 0;
   for (auto t : _trs) {
@@ -694,20 +723,19 @@ void Btp::UpdateWorkState(const BtpPacketPtr &pkt) {
   _lastTr = static_cast<int64_t>(
       std::round(static_cast<double>(_lastTr) / _trs.size()));
 
-  uint32_t et = pkt->GetEt();
-  _lastPeerEt = et;
-
-  _peerIpg = et - _lastPeerEt;
-
-  int64_t over = _iat - _peerIpg;
+  int64_t over = static_cast<int64_t>(_iat) - static_cast<int64_t>(_peerIpg);
   int64_t newTr = over + _lastTr;
   _newTr = newTr;
 
-  SetIpg(pkt->GetIpgReq());
+  _trs.push_back(_newTr);
+  if (_trs.size() > _trCount)
+    _trs.pop_front();
 
-  Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PIPG {}  TR {}  PINIT {}",
-            pkt->GetPacketSize(), iat, _iat, pkt->GetIpgReq(), _peerIpg,
-            _newTr);
+  SetIpg(pkt->GetReqIpg());
+  SetRt(pkt->GetEt());
+
+  Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PEERIPG {}  TR {}",
+            pkt->GetSeq(), iat, _iat, pkt->GetReqIpg(), _peerIpg, _newTr);
 }
 
 void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) { SetLastRxPacket(pkt); }
@@ -722,7 +750,7 @@ uint32_t Btp::GetIat() { return _iat; }
 uint32_t Btp::GetMaxIat() { return _maxIat; }
 uint32_t Btp::GetMinIat() { return _minIat; }
 uint32_t Btp::GetIpg() { return _ipg; }
-uint32_t Btp::GetPeerIpg() { return _reqIpg; }
+uint32_t Btp::GetReqIpg() { return _reqIpg; }
 
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName, btpModeStr = "slave";
