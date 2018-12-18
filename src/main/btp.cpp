@@ -412,7 +412,7 @@ bool Btp::StartRttInit() {
       rttMillis /= rtts;
       SetIpg(rttMillis * 2);
       SetPeerIpg(GetIpg());
-      SetMinTr(static_cast<uint16_t>(rttMillis / 2));
+      SetMinTr(static_cast<uint16_t>(rttMillis / 1.7));
       RttInit = true;
       ReinitBtpVars();
       if (GetMode() == master) {
@@ -682,26 +682,27 @@ void Btp::UpdateWorkState(const BtpPacketPtr &pkt) {
   _lastPeerEt = et;
 
   if (!_firstPktRecv) {
-    _trs.clear();
-    _iats.clear();
+    //_trs.clear();
+    //_iats.clear();
     _lastTr = _minTr;
-    _trs.push_back(_lastTr);
+    //_trs.push_back(_lastTr);
     _firstPktRecv = true;
     Log->Info("FIRST RX - PKT {}  IPG {}  TR {}", pkt->GetSeq(),
               pkt->GetReqIpg(), _newTr);
     return;
   }
+  _iat = iat;
 
-  _iats.push_back(iat);
-  if (_iats.size() > _trCount)
-    _iats.pop_front();
+  //  _iats.push_back(iat);
+  //  if (_iats.size() > _trCount)
+  //    _iats.pop_front();
 
-  _iat = 0;
-  for (auto tiat : _iats) {
-    _iat += tiat;
-  }
-  _iat = static_cast<int64_t>(
-      std::round(static_cast<double>(_iat) / _iats.size()));
+  //  _iat = 0;
+  //  for (auto tiat : _iats) {
+  //    _iat += tiat;
+  //  }
+  //  _iat = static_cast<int64_t>(
+  //      std::round(static_cast<double>(_iat) / _iats.size()));
 
   auto seq = pkt->GetSeq();
   if (seq == _eseq) {
@@ -716,27 +717,33 @@ void Btp::UpdateWorkState(const BtpPacketPtr &pkt) {
     // Do nothing
   }
 
-  _lastTr = 0;
-  for (auto t : _trs) {
-    _lastTr += t;
-  }
+  //  _lastTr = 0;
+  //  for (auto t : _trs) {
+  //    _lastTr += t;
+  //  }
 
-  _lastTr = static_cast<int64_t>(
-      std::round(static_cast<double>(_lastTr) / _trs.size()));
+  //  _lastTr = static_cast<int64_t>(
+  //      std::round(static_cast<double>(_lastTr) / _trs.size()));
 
   int64_t over = static_cast<int64_t>(_iat) - static_cast<int64_t>(_peerIpg);
   int64_t newTr = over + _lastTr;
   _newTr = newTr;
 
-  _trs.push_back(_newTr);
-  if (_trs.size() > _trCount)
-    _trs.pop_front();
+//  _trs.push_back(_newTr);
+//  if (_trs.size() > _trCount)
+//    _trs.pop_front();
+
+  if (_newTr < _minTr)
+    _minTr = _newTr;
+
+ _lastTr = _newTr;
 
   SetIpg(pkt->GetReqIpg());
   SetRt(pkt->GetEt());
 
-  Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PEERIPG {}  TR {}",
-            pkt->GetSeq(), iat, _iat, pkt->GetReqIpg(), _peerIpg, _newTr);
+  Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PEERIPG {}  TR {}  MINTR {}",
+            pkt->GetSeq(), iat, _iat, pkt->GetReqIpg(), _peerIpg, _newTr,
+            _minTr);
 }
 
 void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) { SetLastRxPacket(pkt); }
