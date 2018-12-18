@@ -575,6 +575,7 @@ void Btp::RunTx() {
       case slaveinit: {
         SendBtpMsg(slaveinit_ack);
         Log->Info("SEND slaveinit_ack");
+        std::this_thread::sleep_for(chrono::milliseconds(GetIpg()));
         break;
       }
       default:
