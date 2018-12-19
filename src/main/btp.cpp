@@ -292,13 +292,16 @@ public:
     _lastTr = _minTr;
     _alpha = 800;
     _lastTEd = _lastTr;
-    _tciclo = _lastTr + _alpha;
     _level = no_congestion;
     _maxIpg = _maxIat;
     _minIpg = _minIat;
-    _minCounter = 0.5;
-    _maxCounter = 5;
-    _counter = _minCounter;
+    _maxCounter = UINT16_MAX;
+    _counter = 1;
+    _btpMsg_count = 0;
+    IPGPropose();
+    _ipg = _reqIpg;
+    _btpVarsInit = true;
+    _btpVarsInit_cond.notify_all();
   }
 
   string GetStateStr() {
@@ -358,7 +361,8 @@ public:
     std::unique_lock<std::mutex> lock(_btpMsg_mutex);
     _btpMsg_cond.wait_for(
         lock, std::chrono::milliseconds(static_cast<int>(_tciclo * 2)));
-    if (!_btpMsg && _firstPktRecv) {
+    if (!_btpMsg && _firstPktRecv && _peerBtpState <= slow_decrease &&
+        _btpState <= slow_decrease && _btpMsg_count >= 2) {
       Log->Warn("TIMEOUT");
       UpdateWorkState(packet_loss);
       UpdateCounter();
@@ -423,6 +427,7 @@ public:
     case fast_decrease: {
       switch (level) {
       case no_congestion: {
+        Log->Debug("FAST DECREASE! {}", level);
         if (InLimit(_peerIpg, _minIpg, 0.5, true)) {
           Log->Warn("FAST DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG -- "
                     "PPERIPG {}  -- MINIPG {}",
@@ -432,10 +437,12 @@ public:
         break;
       }
       case low: {
+        Log->Debug("FAST DECREASE! {}", level);
         _btpState = look;
         break;
       }
       default: {
+        Log->Debug("FAST DECREASE! {}", level);
         _btpState = increase_ipg;
         break;
       }
@@ -540,15 +547,15 @@ public:
 
   BtpCongestion GetCongestionLevel(const int64_t &newTr, const int64_t &minTr) {
     BtpCongestion congestion;
-    auto v = minTr * 0.2 + minTr;
+    auto v = minTr * 0.3 + minTr;
     if (newTr > v) {
       congestion = high;
     } else {
-      v = minTr * 0.1 + minTr;
+      v = minTr * 0.2 + minTr;
       if (newTr > v) {
         congestion = medium;
       } else {
-        v = minTr * 0.01 + minTr;
+        v = minTr * 0.1 + minTr;
         if (newTr > v) {
           congestion = low;
         } else {
@@ -560,9 +567,6 @@ public:
   }
 
 private:
-  void _SetInitialIpg();
-  void _SetInitialReqIpg();
-  void _InitTr();
   BtpState _btpState, _peerBtpState;
   int64_t _reqIpg, _ipg, _maxIat, _minIat, _iat, _trCount, _lastPeerEt,
       _peerIpg, _maxIpg;
@@ -584,30 +588,26 @@ private:
   BtpPacketPtr _lastRxPkt, _txPkt;
   bool _firstPktRecv;
 
-  double _counter, _maxCounter, _minCounter;
+  double _counter, _maxCounter;
   int64_t _tciclo, _lastTEd, _alpha;
-  std::mutex _btpMsg_mutex;
-  std::condition_variable _btpMsg_cond;
-  bool _btpMsg;
+  std::mutex _btpMsg_mutex, _btpVarsInit_mutex;
+  std::condition_variable _btpMsg_cond, _btpVarsInit_cond;
+  bool _btpMsg, _btpVarsInit;
   int64_t _minIpg;
   BtpCongestion _level;
+  int _btpMsg_count;
 };
 
 Btp::Btp() {}
 void Btp::Init() {
-  _SetInitialIpg();
-  _SetInitialReqIpg();
-  _InitTr();
   t0 = BtpTime::GetMillis();
-  _lastPeerEt = 0;
-  _peerIpg = 0;
   _pktRcv = false;
-  _firstPktRecv = false;
   _btpState = req_rtt;
   RttInit = false;
   _peerInit = false;
   _btpState = vague;
   _peerBtpState = vague;
+  _btpVarsInit = false;
 
   _rxPb = CreateObject<VariableLengthPacketBuilder>();
   _txPb = CreateObject<VariableLengthPacketBuilder>();
@@ -632,12 +632,20 @@ void Btp::Init() {
   FlushInput();
   std::thread ipgpropose([this]() {
     while (1) {
+      while (!_btpVarsInit) {
+        std::unique_lock<std::mutex> lock(_btpVarsInit_mutex);
+        _btpVarsInit_cond.wait(lock);
+      }
       IPGProposeWork();
     }
   });
   ipgpropose.detach();
   std::thread timeout([this]() {
     while (1) {
+      while (!_btpVarsInit) {
+        std::unique_lock<std::mutex> lock(_btpVarsInit_mutex);
+        _btpVarsInit_cond.wait(lock);
+      }
       TimeOutWork();
     }
   });
@@ -931,16 +939,6 @@ uint8_t Btp::GetSrc() { return _src; }
 
 uint8_t Btp::GetDst() { return _dst; }
 
-void Btp::_InitTr() {
-  _lastTr = _minTr;
-  _newTr = _minTr;
-}
-void Btp::_SetInitialIpg() {
-  if (GetMode() == master)
-    _ipg = 2 * _maxIat;
-}
-void Btp::_SetInitialReqIpg() { _reqIpg = _ipg; }
-
 void Btp::SetState(const BtpState &state) { _btpState = state; }
 void Btp::SetPeerIpg(const uint32_t &ipg) { _reqIpg = ipg; }
 
@@ -948,6 +946,7 @@ void Btp::SetIpg(const uint32_t &ipg) { _ipg = ipg; }
 
 void Btp::ProcessWorkPacket(const BtpPacketPtr &pkt) {
   _btpMsg_mutex.lock();
+  _btpMsg_count += 1;
   t1 = BtpTime::GetMillis();
   int64_t iat = static_cast<int64_t>(t1 - t0);
   t0 = BtpTime::GetMillis();
