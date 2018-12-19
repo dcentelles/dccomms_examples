@@ -357,7 +357,7 @@ public:
   void TimeOutWork() {
     std::unique_lock<std::mutex> lock(_btpMsg_mutex);
     _btpMsg_cond.wait_for(
-        lock, std::chrono::milliseconds(static_cast<int>(_tciclo*2)));
+        lock, std::chrono::milliseconds(static_cast<int>(_tciclo * 2)));
     if (!_btpMsg && _firstPktRecv) {
       Log->Warn("TIMEOUT");
       UpdateWorkState(packet_loss);
@@ -424,7 +424,9 @@ public:
       switch (level) {
       case no_congestion: {
         if (InLimit(_peerIpg, _minIpg, 0.5, true)) {
-          Log->Debug("FAST DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG");
+          Log->Warn("FAST DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG -- "
+                    "PPERIPG {}  -- MINIPG {}",
+                    _peerIpg, _minIpg);
           _btpState = stability_ipg;
         }
         break;
@@ -463,6 +465,7 @@ public:
         break;
       }
       case low: {
+        _btpState = increase_ipg;
         break;
       }
       default: {
@@ -476,11 +479,14 @@ public:
       switch (level) {
       case no_congestion: {
         if (InLimit(_peerIpg, _minIpg, 0.5, true)) {
-          Log->Debug("SLOW DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG");
+          Log->Warn("FAST DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG -- "
+                    "PPERIPG {}  -- MINIPG {}",
+                    _peerIpg, _minIpg);
           _btpState = stability_ipg;
         } else if (InLimit(_counter, _maxCounter, 0.5, false)) {
-          Log->Debug(
-              "SLOW DECREASE IPG -- NO CONGESTION -- INLIMIT MAXCOUNTER");
+          Log->Debug("SLOW DECREASE IPG -- NO CONGESTION -- INLIMIT MAXCOUNTER "
+                     "-- COUNTER {}  -- MAX {}",
+                     _counter, _maxCounter);
           _btpState = stability_max;
         }
         break;
@@ -517,6 +523,7 @@ public:
       }
       default: {
         _maxCounter = _counter;
+        Log->Debug("LOOK UPDATE MAX: {}", _maxCounter);
         _btpState = increase_ipg;
         break;
       }
@@ -1080,7 +1087,7 @@ int main(int argc, char **argv) {
         "maxiat", "BTP max. IAT (ms)",
         cxxopts::value<uint32_t>(maxIat)->default_value("2000"))(
         "miniat", "BTP min. IAT (ms)",
-        cxxopts::value<uint32_t>(minIat)->default_value("100"))(
+        cxxopts::value<uint32_t>(minIat)->default_value("1"))(
         "mintr", "BTP minimum end to end delay from peer (ms)",
         cxxopts::value<uint32_t>(minTr)->default_value("2000"))(
         "trcount", "BTP tr and iat counter for mean (ms)",
