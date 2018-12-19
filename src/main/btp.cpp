@@ -81,7 +81,8 @@ enum BtpCongestion {
   no_congestion,
   low,    //>10%
   medium, //>40%
-  high    //>70%
+  high,   //>70%
+  packet_loss
 };
 
 enum BtpMode { master, slave };
@@ -289,10 +290,15 @@ public:
     _lastPeerEt = 0;
     _peerIpg = 0;
     _lastTr = _minTr;
-    _counter = 0;
-    _alpha = 10;
+    _alpha = 800;
     _lastTEd = _lastTr;
     _tciclo = _lastTr + _alpha;
+    _level = no_congestion;
+    _maxIpg = _maxIat;
+    _minIpg = _minIat;
+    _minCounter = 0.5;
+    _maxCounter = 5;
+    _counter = _minCounter;
   }
 
   string GetStateStr() {
@@ -313,6 +319,14 @@ public:
       return "RTT_INIT";
     }
   }
+  bool InLimit(const double &v, const double &limit, const double &error,
+               bool min) {
+    if (min) // min limit
+      return v < limit + error;
+    else {
+      return v > limit - error;
+    }
+  }
 
   void IPGPropose() {
     auto tEd = 1. / 8 * _lastTr + 7. / 8 * _lastTEd;
@@ -321,40 +335,67 @@ public:
     if (ipg < _minIpg) {
       ipg = _minIpg;
     }
-    _ipg = ipg;
+    _reqIpg = ipg;
     _lastTEd = tEd;
+    Log->Debug("TCICLO {}  COUNTER {} ==> REQIPG {}", _tciclo, _counter,
+               _reqIpg);
+  }
+
+  void IPGProposeWork() {
+    this_thread::sleep_for(milliseconds(_tciclo));
+    std::unique_lock<std::mutex> lock(_btpMsg_mutex);
+    if (_firstPktRecv) {
+      Log->Debug("IPG PROPOSE. TC {}", _tciclo);
+      UpdateWorkState(_level);
+      UpdateCounter();
+      IPGPropose();
+    } else {
+      _btpMsg_cond.wait(lock);
+    }
   }
 
   void TimeOutWork() {
     std::unique_lock<std::mutex> lock(_btpMsg_mutex);
-    _btpMsg_cond.wait_for(lock, std::chrono::milliseconds(_maxIat));
-    if (!_btpMsg) {
+    _btpMsg_cond.wait_for(
+        lock, std::chrono::milliseconds(static_cast<int>(_tciclo*2)));
+    if (!_btpMsg && _firstPktRecv) {
+      Log->Warn("TIMEOUT");
+      UpdateWorkState(packet_loss);
+      UpdateCounter();
+      IPGPropose();
     }
     _btpMsg = false;
   }
-  void UpdateWorkState(const BtpCongestion &level) {
+
+  double GetGamma(const BtpCongestion &level) {
+    double gamma;
+    switch (level) {
+    case low: {
+      gamma = 0.01;
+      break;
+    }
+    case medium: {
+      gamma = 0.10;
+      break;
+    }
+    case high: {
+      gamma = 0.25;
+      break;
+    }
+    case packet_loss: {
+      gamma = 0.5;
+      break;
+    }
+    default:
+      gamma = 0;
+    }
+    return gamma;
+  }
+
+  void UpdateCounter() {
     switch (_btpState) {
     case fast_decrease: {
-      switch (level) {
-      case no_congestion: {
-        if (_ipg > _minIpg) {
-          _counter += 1;
-        } else {
-          _btpState = stability_ipg;
-        }
-        break;
-      }
-      case low: {
-        _btpState = look;
-        break;
-      }
-      case medium: {
-        break;
-      }
-      case high: {
-        break;
-      }
-      }
+      _counter += 1;
       break;
     }
     case stability_ipg: {
@@ -364,12 +405,122 @@ public:
       break;
     }
     case slow_decrease: {
+      _counter = _counter + 1. / _counter;
       break;
     }
     case increase_ipg: {
+      auto gamma = GetGamma(_level);
+      _counter = _counter - gamma * _counter;
       break;
     }
     case look: {
+      break;
+    }
+    }
+  }
+  void UpdateWorkState(const BtpCongestion &level) {
+    switch (_btpState) {
+    case fast_decrease: {
+      switch (level) {
+      case no_congestion: {
+        if (InLimit(_peerIpg, _minIpg, 0.5, true)) {
+          Log->Debug("FAST DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG");
+          _btpState = stability_ipg;
+        }
+        break;
+      }
+      case low: {
+        _btpState = look;
+        break;
+      }
+      default: {
+        _btpState = increase_ipg;
+        break;
+      }
+      }
+      break;
+    }
+    case stability_ipg: {
+      Log->Debug("STABILITY IPG");
+      switch (level) {
+      case no_congestion: {
+        break;
+      }
+      case low: {
+        break;
+      }
+      default: {
+        _btpState = increase_ipg;
+        break;
+      }
+      }
+      break;
+    }
+    case stability_max: {
+      switch (level) {
+      case no_congestion: {
+        _btpState = slow_decrease;
+        break;
+      }
+      case low: {
+        break;
+      }
+      default: {
+        _btpState = increase_ipg;
+        break;
+      }
+      }
+      break;
+    }
+    case slow_decrease: {
+      switch (level) {
+      case no_congestion: {
+        if (InLimit(_peerIpg, _minIpg, 0.5, true)) {
+          Log->Debug("SLOW DECREASE IPG -- NO CONGESTION -- INLIMIT MINIPG");
+          _btpState = stability_ipg;
+        } else if (InLimit(_counter, _maxCounter, 0.5, false)) {
+          Log->Debug(
+              "SLOW DECREASE IPG -- NO CONGESTION -- INLIMIT MAXCOUNTER");
+          _btpState = stability_max;
+        }
+        break;
+      }
+      case low: {
+        _btpState = look;
+        break;
+      }
+      default: {
+        _btpState = increase_ipg;
+        break;
+      }
+      }
+      break;
+    }
+    case increase_ipg: {
+      switch (level) {
+      case no_congestion: {
+        _btpState = slow_decrease;
+        break;
+      }
+      default: {
+        _btpState = increase_ipg;
+        break;
+      }
+      }
+      break;
+    }
+    case look: {
+      switch (level) {
+      case no_congestion: {
+        _btpState = slow_decrease;
+        break;
+      }
+      default: {
+        _maxCounter = _counter;
+        _btpState = increase_ipg;
+        break;
+      }
+      }
       break;
     }
     default: {
@@ -377,19 +528,20 @@ public:
       break;
     }
     }
+    Log->Debug("BTP LVL: {}  ST: {}", _level, GetStateStr());
   }
 
   BtpCongestion GetCongestionLevel(const int64_t &newTr, const int64_t &minTr) {
     BtpCongestion congestion;
-    auto v = minTr * 0.70 + minTr;
+    auto v = minTr * 0.2 + minTr;
     if (newTr > v) {
       congestion = high;
     } else {
-      v = minTr * 0.40 + minTr;
+      v = minTr * 0.1 + minTr;
       if (newTr > v) {
         congestion = medium;
       } else {
-        v = minTr * 0.10 + minTr;
+        v = minTr * 0.01 + minTr;
         if (newTr > v) {
           congestion = low;
         } else {
@@ -406,7 +558,7 @@ private:
   void _InitTr();
   BtpState _btpState, _peerBtpState;
   int64_t _reqIpg, _ipg, _maxIat, _minIat, _iat, _trCount, _lastPeerEt,
-      _peerIpg;
+      _peerIpg, _maxIpg;
   btpField _rt;
   int64_t _lastTr, _newTr, _minTr;
   BtpMode _btpMode;
@@ -425,12 +577,13 @@ private:
   BtpPacketPtr _lastRxPkt, _txPkt;
   bool _firstPktRecv;
 
-  int64_t _counter, _tciclo, _lastTEd, _alpha;
-  double _gamma;
+  double _counter, _maxCounter, _minCounter;
+  int64_t _tciclo, _lastTEd, _alpha;
   std::mutex _btpMsg_mutex;
   std::condition_variable _btpMsg_cond;
   bool _btpMsg;
   int64_t _minIpg;
+  BtpCongestion _level;
 };
 
 Btp::Btp() {}
@@ -439,7 +592,6 @@ void Btp::Init() {
   _SetInitialReqIpg();
   _InitTr();
   t0 = BtpTime::GetMillis();
-  _minIpg = 200;
   _lastPeerEt = 0;
   _peerIpg = 0;
   _pktRcv = false;
@@ -471,6 +623,18 @@ void Btp::Init() {
   }
 
   FlushInput();
+  std::thread ipgpropose([this]() {
+    while (1) {
+      IPGProposeWork();
+    }
+  });
+  ipgpropose.detach();
+  std::thread timeout([this]() {
+    while (1) {
+      TimeOutWork();
+    }
+  });
+  timeout.detach();
 }
 
 bool Btp::StartRttInit() {
@@ -705,9 +869,8 @@ void Btp::RunTx() {
       }
       default:
         SendBtpMsg(GetState());
-        Log->Info("TX PKT SEQ {}  IPG {}  RIPG {}  MINTR {}  BTPSTATE: {}",
-                  _txPkt->GetSeq(), GetIpg(), _txPkt->GetReqIpg(), GetMinTr(),
-                  GetStateStr());
+        Log->Info("TX {}  MINTR {}  IPG {}  RIPG {}", _txPkt->GetSeq(),
+                  GetMinTr(), GetIpg(), _txPkt->GetReqIpg(), GetStateStr());
         std::this_thread::sleep_for(chrono::milliseconds(GetIpg()));
         break;
       }
@@ -794,6 +957,7 @@ void Btp::ProcessWorkPacket(const BtpPacketPtr &pkt) {
     _firstPktRecv = true;
     Log->Info("FIRST RX - PKT {}  IPG {}  TR {}", pkt->GetSeq(),
               pkt->GetReqIpg(), _newTr);
+    _eseq = pkt->GetSeq() + 1;
     _btpMsg_mutex.unlock();
     return;
   }
@@ -838,23 +1002,32 @@ void Btp::ProcessWorkPacket(const BtpPacketPtr &pkt) {
   auto seq = pkt->GetSeq();
   if (seq == _eseq) {
     _eseq += 1;
-    GetCongestionLevel(_newTr, _minTr);
+    level = GetCongestionLevel(_newTr, _minTr);
   } else if (seq > _eseq) {
     // packet lost
     _eseq = seq + 1;
-    level = high;
+    level = packet_loss;
   } else {
     _eseq = seq + 1;
-    GetCongestionLevel(_newTr, _minTr);
+    level = GetCongestionLevel(_newTr, _minTr);
   }
 
-  UpdateWorkState(level);
-  IPGPropose();
+  _level = level;
 
-  Log->Info("RX - PKT {}  LIAT {}  IAT {}  IPG {}  PEERIPG {}  TR {}  MINTR {} "
-            " STATE {}  CL {}",
-            pkt->GetSeq(), iat, _iat, pkt->GetReqIpg(), _peerIpg, _newTr,
-            _minTr, GetStateStr(), level);
+  if (level != packet_loss) {
+    Log->Info(
+        "RX {}  MINTR {}  CL {}  LIAT {}  IAT {}  IPG {}  PEERIPG {}  TR {}  "
+        "STATE {}",
+        pkt->GetSeq(), _minTr, level, iat, _iat, pkt->GetReqIpg(), _peerIpg,
+        _newTr, GetStateStr());
+  } else {
+    Log->Warn(
+        "RX {}  MINTR {}  CL {}  LIAT {}  IAT {}  IPG {}  PEERIPG {}  TR {}  "
+        "STATE {}",
+        pkt->GetSeq(), _minTr, level, iat, _iat, pkt->GetReqIpg(), _peerIpg,
+        _newTr, GetStateStr());
+  }
+  _btpMsg = true;
   _btpMsg_mutex.unlock();
   _btpMsg_cond.notify_all();
 }
