@@ -290,7 +290,7 @@ public:
     _lastPeerEt = 0;
     _peerIpg = 0;
     _lastTr = _minTr;
-    _alpha = 800;
+    _alpha = 1600;
     _lastTEd = _lastTr;
     _level = no_congestion;
     _maxIpg = _maxIat;
@@ -547,15 +547,15 @@ public:
 
   BtpCongestion GetCongestionLevel(const int64_t &newTr, const int64_t &minTr) {
     BtpCongestion congestion;
-    auto v = minTr * 0.3 + minTr;
+    auto v = minTr * 0.2 + minTr;
     if (newTr > v) {
       congestion = high;
     } else {
-      v = minTr * 0.2 + minTr;
+      v = minTr * 0.1 + minTr;
       if (newTr > v) {
         congestion = medium;
       } else {
-        v = minTr * 0.1 + minTr;
+        v = minTr * 0.03 + minTr;
         if (newTr > v) {
           congestion = low;
         } else {
