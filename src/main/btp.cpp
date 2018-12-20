@@ -297,6 +297,7 @@ public:
     _minIpg = _minIat;
     _maxCounter = UINT16_MAX;
     _counter = 1;
+    _beta = 1;
     _btpMsg_count = 0;
     IPGPropose();
     _ipg = _reqIpg;
@@ -345,24 +346,35 @@ public:
   }
 
   void IPGProposeWork() {
-    this_thread::sleep_for(milliseconds(_tciclo));
     std::unique_lock<std::mutex> lock(_btpMsg_mutex);
-    if (_firstPktRecv) {
-      Log->Debug("IPG PROPOSE. TC {}", _tciclo);
-      UpdateWorkState(_level);
-      UpdateCounter();
-      IPGPropose();
-    } else {
-      _btpMsg_cond.wait(lock);
+    while (!_firstPktRecv) {
+      _btpMsg_cond.wait_for(lock,
+                            chrono::milliseconds(static_cast<int>(_tciclo)));
     }
+    auto res = _ipgPropose_cond.wait_for(
+        lock, chrono::milliseconds(static_cast<int>(_tciclo * _beta)));
+
+    if (res == std::cv_status::no_timeout) {
+      if (_level != no_congestion)
+        Log->Debug("Executing IPGPropose due to congestion detection");
+      else {
+        return;
+      }
+    }
+
+    Log->Debug("IPG PROPOSE. TC {}", _tciclo * _beta);
+    UpdateWorkState(_level);
+    UpdateCounter();
+    IPGPropose();
   }
 
   void TimeOutWork() {
     std::unique_lock<std::mutex> lock(_btpMsg_mutex);
-    _btpMsg_cond.wait_for(
+    auto res = _btpMsg_cond.wait_for(
         lock, std::chrono::milliseconds(static_cast<int>(_tciclo * 2)));
-    if (!_btpMsg && _firstPktRecv && _peerBtpState <= slow_decrease &&
-        _btpState <= slow_decrease && _btpMsg_count >= 2) {
+    if (res == std::cv_status::timeout && !_btpMsg && _firstPktRecv &&
+        _peerBtpState <= slow_decrease && _btpState <= slow_decrease &&
+        _btpMsg_count >= 2) {
       Log->Warn("TIMEOUT");
       UpdateWorkState(packet_loss);
       UpdateCounter();
@@ -589,13 +601,14 @@ private:
   bool _firstPktRecv;
 
   double _counter, _maxCounter;
-  int64_t _tciclo, _lastTEd, _alpha;
+  double _tciclo, _lastTEd, _alpha;
   std::mutex _btpMsg_mutex, _btpVarsInit_mutex;
-  std::condition_variable _btpMsg_cond, _btpVarsInit_cond;
+  std::condition_variable _btpMsg_cond, _btpVarsInit_cond, _ipgPropose_cond;
   bool _btpMsg, _btpVarsInit;
   int64_t _minIpg;
   BtpCongestion _level;
   int _btpMsg_count;
+  double _beta;
 };
 
 Btp::Btp() {}
@@ -1032,6 +1045,23 @@ void Btp::ProcessWorkPacket(const BtpPacketPtr &pkt) {
         "STATE {}",
         pkt->GetSeq(), _minTr, level, iat, _iat, pkt->GetReqIpg(), _peerIpg,
         _newTr, GetStateStr());
+  }
+  switch (_level) {
+  case no_congestion:
+    _beta = 1;
+    break;
+  case low:
+    _beta = 0.5;
+    break;
+  case medium:
+    _beta = 0.4;
+    break;
+  case high:
+    _beta = 0.3;
+    break;
+  case packet_loss:
+    _beta = 0.2;
+    break;
   }
   _btpMsg = true;
   _btpMsg_mutex.unlock();
