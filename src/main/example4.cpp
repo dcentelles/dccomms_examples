@@ -175,7 +175,9 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
+      txPacket->SetVirtualSeq(npacket);
       *dstPtr = dstadd;
+      txPacket->SetVirtualDestAddr(dstadd);
       txPacket->PayloadUpdated(msgSize + 3);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
       log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());

@@ -98,7 +98,7 @@ public:
   void SetSrc(uint8_t add);
   void SetEt(const btpField &t);
   void SetRt(const btpField &r);
-  void SetSeq(const uint16_t &seq);
+  void SetBtpSeq(const uint16_t &seq);
   void SetReqIpg(const btpField &ipg);
 
   void UpdateSeq();
@@ -107,7 +107,7 @@ public:
   uint8_t GetSrc();
   btpField GetEt();
   btpField GetRt();
-  uint16_t GetSeq();
+  uint16_t GetBtpSeq();
   btpField GetReqIpg();
   uint8_t *GetBtpPayloadBuffer();
 
@@ -160,13 +160,13 @@ uint8_t BtpPacket::GetSrc() { return (*_add & 0xf0) >> 4; }
 
 void BtpPacket::SetEt(const btpField &t) { *_et = t; }
 void BtpPacket::SetRt(const btpField &r) { *_rt = r; }
-void BtpPacket::SetSeq(const uint16_t &seq) { *_seq = seq; }
+void BtpPacket::SetBtpSeq(const uint16_t &seq) { *_seq = seq; }
 void BtpPacket::UpdateSeq() { *_seq = *_seq + 1; }
 void BtpPacket::SetReqIpg(const btpField &ipg) { *_ipgReq = ipg; }
 
 btpField BtpPacket::GetEt() { return *_et; }
 btpField BtpPacket::GetRt() { return *_rt; }
-uint16_t BtpPacket::GetSeq() { return *_seq; }
+uint16_t BtpPacket::GetBtpSeq() { return *_seq; }
 btpField BtpPacket::GetReqIpg() { return *_ipgReq; }
 uint8_t *BtpPacket::GetBtpPayloadBuffer() { return _payload; }
 void BtpPacket::BtpPayloadUpdated(const uint32_t &size) {
@@ -1031,6 +1031,27 @@ void Btp::ProcessWorkPacket(const BtpPacketPtr &pkt) {
     level = GetCongestionLevel(_newTr, _minTr);
   }
 
+  if (level != _level) {
+    switch (level) {
+    case no_congestion:
+      _beta = 1;
+      break;
+    case low:
+      _beta = 0.5;
+      break;
+    case medium:
+      _beta = 0.4;
+      break;
+    case high:
+      _beta = 0.3;
+      break;
+    case packet_loss:
+      _beta = 0.2;
+      break;
+    }
+  }
+  auto oldLevel = _level;
+
   _level = level;
 
   if (level != packet_loss) {
@@ -1046,26 +1067,13 @@ void Btp::ProcessWorkPacket(const BtpPacketPtr &pkt) {
         pkt->GetSeq(), _minTr, level, iat, _iat, pkt->GetReqIpg(), _peerIpg,
         _newTr, GetStateStr());
   }
-  switch (_level) {
-  case no_congestion:
-    _beta = 1;
-    break;
-  case low:
-    _beta = 0.5;
-    break;
-  case medium:
-    _beta = 0.4;
-    break;
-  case high:
-    _beta = 0.3;
-    break;
-  case packet_loss:
-    _beta = 0.2;
-    break;
-  }
   _btpMsg = true;
   _btpMsg_mutex.unlock();
   _btpMsg_cond.notify_all();
+
+  if (oldLevel > _level) {
+    _ipgPropose_cond.notify_all();
+  }
 }
 
 void Btp::ProcessRxPacket(const BtpPacketPtr &pkt) { SetLastRxPacket(pkt); }
