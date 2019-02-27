@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
     options.add_options("node_comms")
         ("tx-packet-type", "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket.", cxxopts::value<uint32_t>(txPktTypeInt))
         ("rx-packet-type", "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket", cxxopts::value<uint32_t>(rxPktTypeInt))
-        ("add", "Device address (only used when packet type is DataLinkFrame)", cxxopts::value<uint32_t>(add))
+        ("add", "Device address", cxxopts::value<uint32_t>(add))
         ("dstadd", "Destination device address (if the packet type is not DataLinkFrame the src and dst addr is set in the first payload byte. Not used in SimplePacket)", cxxopts::value<uint32_t>(dstadd))
         ("num-packets", "number of packets to transmit (default: 0)", cxxopts::value<uint32_t>(nPackets))
         ("ms-start", "It will begin to transmit num-packets packets after ms-start millis (default: 0 ms)", cxxopts::value<uint64_t>(msStart))
@@ -175,12 +175,12 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       *seqPtr = npacket;
-      txPacket->SetVirtualSeq(npacket);
+      txPacket->SetSeq(npacket);
       *dstPtr = dstadd;
-      txPacket->SetVirtualDestAddr(dstadd);
+      txPacket->SetDestAddr(dstadd);
       txPacket->PayloadUpdated(msgSize + 3);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
-      log->Info("TX SEQ {} SIZE {}", npacket, txPacket->GetPacketSize());
+      log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket, txPacket->GetPacketSize());
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
         node >> dlf;
         if (dlf->PacketIsOk()) {
           uint16_t *seqPtr = (uint16_t *)(dlf->GetPayloadBuffer()+1);
-          log->Info("RX SEQ {} SIZE {}", *seqPtr, dlf->GetPacketSize());
+          log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrcAddr(), *seqPtr, dlf->GetPacketSize());
         } else
           log->Warn("ERR");
       }
