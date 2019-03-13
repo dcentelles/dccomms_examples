@@ -38,11 +38,9 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
   return size;
 }
 void DcMacPacket::DoCopyFromRawBuffer(void *buffer) {
-  int prefixSize = PRE_SIZE + ADD_SIZE;
-  uint8_t *type = (uint8_t *)buffer + prefixSize;
+  uint8_t *type = (uint8_t *)buffer + PRE_SIZE + ADD_SIZE;
   Type ptype = _GetType(type);
-  uint8_t *variableArea = type + 1;
-  int size = prefixSize + _GetTypeSize(ptype, variableArea) + FCS_SIZE;
+  int size = PRE_SIZE + _prefixSize + _GetTypeSize(ptype, _variableArea) + FCS_SIZE;
   memcpy(GetBuffer(), buffer, size);
 }
 
@@ -321,7 +319,7 @@ void DcMac::SlaveRunTx() {
   _tx = std::thread([this]() {
     while (1) {
       std::unique_lock<std::mutex> lock(_status_mutex);
-      while (!_status != syncreceived) {
+      while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
       uint32_t rtsSlotDelay = _addr * _rtsSlotDur;
@@ -337,7 +335,6 @@ void DcMac::SlaveRunTx() {
       } else {
         Log->critical("Internal error. packet has errors");
       }
-      _stream << pkt;
     }
   });
 
