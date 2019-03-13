@@ -137,7 +137,7 @@ add_definitions(-fPIC -std=c++11)
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 
-SET(SRCPATH src/)
+SET(SRCPATH ${CMAKE_CURRENT_SOURCE_DIR}/src/)
 SET(${PROJECT_NAME}_INCLUDE_DIRS
     ${SRCPATH}/include
     ${${DCCOMMS_UTILS_GIT}_INCLUDE_DIRS}
@@ -147,13 +147,13 @@ include_directories(
   ${${PROJECT_NAME}_INCLUDE_DIRS}
 )
 
-#SET(${PROJECT_NAME}_CPP_FILES
-#                        ${SRCPATH}lib/src/module1.cpp
-#                        )
+SET(${PROJECT_NAME}_PACKETS_CPP_FILES
+                        ${SRCPATH}/DcMac.cpp
+                        )
 
-#add_library(${PROJECT_NAME} SHARED ${${PROJECT_NAME}_CPP_FILES})
-#target_link_libraries(${PROJECT_NAME} ${LIB2_GIT})
-#target_include_directories(${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}_INCLUDE_DIRS})
+add_library(${PROJECT_NAME}_packets SHARED ${${PROJECT_NAME}_PACKETS_CPP_FILES})
+target_link_libraries(${PROJECT_NAME}_packets ${DCCOMMS_GIT} cxxopts)
+target_include_directories(${PROJECT_NAME}_packets PUBLIC ${${PROJECT_NAME}_INCLUDE_DIRS})
 
 add_executable (example1 ${SRCPATH}main/example1.cpp)
 target_link_libraries(example1 ${DCCOMMS_UTILS_GIT} cxxopts)
@@ -165,7 +165,7 @@ add_executable (example3 ${SRCPATH}main/example3.cpp)
 target_link_libraries(example3 ${DCCOMMS_UTILS_GIT} cxxopts)
 
 add_executable (example4 ${SRCPATH}main/example4.cpp)
-target_link_libraries(example4 ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(example4 ${DCCOMMS_UTILS_GIT} cxxopts ${PROJECT_NAME}_packets)
 
 add_executable (example5 ${SRCPATH}main/example5.cpp)
 target_link_libraries(example5 ${DCCOMMS_UTILS_GIT} cxxopts)
