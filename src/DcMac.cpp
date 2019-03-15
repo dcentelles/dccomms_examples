@@ -5,7 +5,7 @@ namespace dccomms_examples {
 
 DcMacPacket::DcMacPacket() {
   _prefixSize = ADD_SIZE + FLAGS_SIZE;
-  _overheadSize = _prefixSize + FCS_SIZE;
+  _overheadSize = PRE_SIZE + _prefixSize + FCS_SIZE;
   _maxPacketSize =
       _overheadSize + TIME_SIZE + PAYLOAD_SIZE_FIELD + MAX_PAYLOAD_SIZE;
   _AllocBuffer(_maxPacketSize);
@@ -18,7 +18,7 @@ void DcMacPacket::_Init() {
   _add = _pre + 1;
   _flags = _add + 1;
   _variableArea = _flags + 1;
-  _time = (uint32_t *)(_variableArea);
+  _time = (DcMacTimeField *)(_variableArea);
   _payloadSize = _variableArea;
   *_payloadSize = 0;
   _payload = _payloadSize + 1;
@@ -27,12 +27,12 @@ void DcMacPacket::_Init() {
 
 int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
   int size;
-  if (ptype == Type::sync || ptype == Type::cts || ptype == Type::rts) {
+  if (ptype == Type::cts || ptype == Type::rts) {
     size = TIME_SIZE;
   } else if (ptype == data) {
     uint8_t payloadSize = *buffer;
     size = PAYLOAD_SIZE_FIELD + payloadSize;
-  } else {
+  } else { // sync
     size = 0;
   }
   return size;
@@ -40,7 +40,8 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
 void DcMacPacket::DoCopyFromRawBuffer(void *buffer) {
   uint8_t *type = (uint8_t *)buffer + PRE_SIZE + ADD_SIZE;
   Type ptype = _GetType(type);
-  int size = PRE_SIZE + _prefixSize + _GetTypeSize(ptype, _variableArea) + FCS_SIZE;
+  int size =
+      PRE_SIZE + _prefixSize + _GetTypeSize(ptype, _variableArea) + FCS_SIZE;
   memcpy(GetBuffer(), buffer, size);
 }
 
@@ -61,14 +62,17 @@ void DcMacPacket::Read(Stream *stream) {
   int size;
   uint8_t *end;
   if (type != unknown) {
-    if (type != data) {
+    if (type == cts || type == rts) {
       stream->Read(_variableArea, TIME_SIZE);
       size = 0;
       end = _variableArea + TIME_SIZE;
-    } else {
+    } else if (type == data) {
       stream->Read(_variableArea, PAYLOAD_SIZE_FIELD);
       size = GetPayloadSize();
       end = _variableArea + PAYLOAD_SIZE_FIELD;
+    } else { // sync
+      size = 0;
+      end = _variableArea;
     }
   } else {
     size = 0;
@@ -101,13 +105,16 @@ void DcMacPacket::UpdateFCS() {
   uint16_t crc;
   Type type = GetType();
   if (type != unknown) {
-    if (type != data) {
+    if (type == cts || type == rts) {
       crc = Checksum::crc16(_add, _prefixSize + TIME_SIZE);
       _fcs = _variableArea + TIME_SIZE;
-    } else {
+    } else if (type == data) {
       crc = Checksum::crc16(_add,
                             _prefixSize + PAYLOAD_SIZE_FIELD + *_payloadSize);
       _fcs = _variableArea + PAYLOAD_SIZE_FIELD + *_payloadSize;
+    } else { // sync
+      crc = Checksum::crc16(_add, _prefixSize);
+      _fcs = _variableArea;
     }
   } else {
     _fcs = _variableArea;
@@ -122,11 +129,13 @@ bool DcMacPacket::_CheckFCS() {
   uint16_t crc;
   Type type = GetType();
   if (type != unknown) {
-    if (type != data) {
+    if (type == cts || type == rts) {
       crc = Checksum::crc16(_add, _prefixSize + TIME_SIZE + FCS_SIZE);
-    } else {
+    } else if (type == data) {
       crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD +
                                       *_payloadSize + FCS_SIZE);
+    } else { // sync
+      crc = Checksum::crc16(_add, _prefixSize + FCS_SIZE);
     }
   } else {
     crc = 1;
@@ -178,7 +187,7 @@ void DcMacPacket::SetSrc(uint8_t add) {
 
 uint8_t DcMacPacket::GetSrc() { return (*_add & 0xf0) >> 4; }
 
-uint32_t DcMacPacket::GetTime() {
+DcMacTimeField DcMacPacket::GetTime() {
   Type type = GetType();
   if (type != data && type != unknown) {
     return *_time;
@@ -187,7 +196,7 @@ uint32_t DcMacPacket::GetTime() {
   }
 }
 
-void DcMacPacket::SetTime(const uint32_t &tt) { *_time = tt; }
+void DcMacPacket::SetTime(const DcMacTimeField &tt) { *_time = tt; }
 
 CLASS_LOADER_REGISTER_CLASS(DcMacPacketBuilder, IPacketBuilder)
 
@@ -199,7 +208,8 @@ DcMac::DcMac() {
   _maxQueueSize = 1024;
   _started = false;
   _pb = CreateObject<DcMacPacketBuilder>();
-
+  _devIntrinsicDelay = 0;
+  _devBitRate = 1e4;
   SetLogName("DcMac");
   LogToConsole(true);
 }
@@ -226,6 +236,11 @@ DcMac::Mode DcMac::GetMode() {
   Log->debug("Mode: {}", _mode);
 }
 
+void DcMac::SetDevBitRate(const uint32_t &bitrate) { _devBitRate = bitrate; }
+void DcMac::SetDevIntrinsicDelay(const double &delay) {
+  _devIntrinsicDelay = delay;
+}
+
 void DcMac::SetStream(CommsDeviceServicePtr stream) { _stream = stream; }
 
 void DcMac::Start() {
@@ -246,7 +261,7 @@ void DcMac::SetMaxDataSlotDur(const uint32_t &slotdur) {
   _maxDataSlotDur = slotdur;
 }
 
-void DcMac::SetRtsSlotDur(const uint32_t &slotdur) { _rtsSlotDur = slotdur; }
+void DcMac::SetRtsSlotDur(const uint32_t &slotdur) { _rtsCtsSlotDur = slotdur; }
 void DcMac::ReadPacket(const PacketPtr &pkt) {
   PacketPtr npkt = GetNextRxPacket();
   pkt->CopyFromRawBuffer(npkt->GetBuffer());
@@ -312,6 +327,32 @@ void DcMac::PushNewTxPacket(PacketPtr dlf) {
   _txfifo_mutex.unlock();
 }
 
+double DcMac::GetPktTransmissionMillis(const uint32_t &size) {
+  return (size * 8. / _devBitRate) * 1000 + _devIntrinsicDelay;
+}
+
+void DcMac::SetPropSpeed(const double &propspeed) {
+  _propSpeed = propspeed; // m/s
+}
+
+void DcMac::SetMaxDistance(const double &distance) {
+  _maxDistance = distance; // m
+}
+
+void DcMac::UpdateSlotDurFromEstimation() {
+  DcMacPacket pkt;
+  pkt.SetType(DcMacPacket::rts);
+  auto size = pkt.GetPacketSize();
+  auto tt = GetPktTransmissionMillis(size);
+  auto maxPropDelay = _maxDistance / _propSpeed * 1000; // ms
+  auto error = 40;
+  auto slotdur = (tt + maxPropDelay) + error;
+  Log->debug(
+      "RTS/CTS size: {} ; TT: {} ms ; MP: {} ms ; Err: +{} ms ; ESD: {} ms",
+      size, tt, maxPropDelay, error, slotdur);
+  _rtsCtsSlotDur = slotdur;
+}
+
 void DcMac::SlaveRunTx() {
   /*
    * Este proceso se encarga de enviar los paquetes
@@ -322,16 +363,21 @@ void DcMac::SlaveRunTx() {
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
-      uint32_t rtsSlotDelay = _addr * _rtsSlotDur;
-      this_thread::sleep_for(milliseconds(rtsSlotDelay));
+      _status = waitnextcycle;
+      lock.unlock();
       DcMacPacketPtr pkt(new DcMacPacket());
       pkt->SetDst(0);
       pkt->SetSrc(_addr);
       pkt->SetType(DcMacPacket::rts);
       pkt->SetTime(100);
       pkt->UpdateFCS();
+      uint32_t rtsSlotDelay = (_addr - 1) * _rtsCtsSlotDur;
+
+      this_thread::sleep_for(milliseconds(rtsSlotDelay));
+
       if (pkt->PacketIsOk()) {
         _stream << pkt;
+        Log->debug("Send rts {}", RelativeTime::GetMillis());
       } else {
         Log->critical("Internal error. packet has errors");
       }
@@ -347,12 +393,13 @@ void DcMac::SlaveRunRx() {
    */
   _rx = std::thread([this]() {
     uint32_t npkts = 0;
+    DiscardPacketsInRxFIFO();
     DcMacPacketPtr pkt = CreateObject<DcMacPacket>();
     while (1) {
       _stream >> pkt;
       if (pkt->PacketIsOk()) {
         npkts += 1;
-        Log->debug("S: RX DCMAC PKT");
+        Log->debug("S: RX DCMAC PKT {}", pkt->GetPacketSize());
         SlaveProcessRxPacket(pkt);
       }
     }
@@ -392,18 +439,23 @@ void DcMac::MasterRunTx() {
         Log->critical("Internal error. packet has errors");
       }
 
+      auto pktSize = syncPkt->GetPacketSize();
+      uint32_t minEnd2End =
+          ((pktSize * 8) / _devBitRate) * 1000 + _devIntrinsicDelay;
+      this_thread::sleep_for(milliseconds(minEnd2End));
+
       for (int s = 0; s < _maxNodes; s++) {
-        std::unique_lock<std::mutex> rxfifoLock(_rxfifo_mutex);
-        _rxfifo_cond.wait_for(rxfifoLock, milliseconds(_rtsSlotDur));
+        std::unique_lock<std::mutex> statusLock(_status_mutex);
+        _status_cond.wait_for(statusLock, milliseconds(_rtsCtsSlotDur));
         _currentRtsSlot += 1;
-        if (_rxfifo.size() > 0) {
-          Log->debug("rts received from slave {}", _currentRtsSlot);
-          _rxfifo.pop();
+        if (_status == rtsreceived) {
+          Log->debug("RTS received from slave {}", _currentRtsSlot);
         } else {
           _time = RelativeTime::GetMillis();
           Log->warn("Timeout waiting for rts packet from slave {}. Time: {}",
                     _currentRtsSlot, _time);
         }
+        _status = waitrts;
       }
 
       // Check if there are packets in txfifo
@@ -423,12 +475,13 @@ void DcMac::MasterRunRx() {
    */
   _rx = std::thread([this]() {
     uint32_t npkts = 0;
+    DiscardPacketsInRxFIFO();
     DcMacPacketPtr pkt = CreateObject<DcMacPacket>();
     while (1) {
       _stream >> pkt;
       if (pkt->PacketIsOk()) {
         npkts += 1;
-        Log->debug("M: RX DCMAC PKT");
+        Log->debug("M: RX DCMAC PKT {}", pkt->GetPacketSize());
         MasterProcessRxPacket(pkt);
       }
     }
@@ -452,7 +505,7 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::rts: {
-    Log->debug("RTS received");
+    Log->debug("RTS received {}", RelativeTime::GetMillis());
     _status = rtsreceived;
     break;
   }
@@ -460,6 +513,7 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     if (dst == _addr) {
       Log->debug("DATA received");
       _status = datareceived;
+      PushNewRxPacket(pkt);
     }
     break;
   }
@@ -494,6 +548,7 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
   case DcMacPacket::data: {
     if (dst == _addr) {
       Log->debug("DATA received");
+      PushNewRxPacket(pkt);
     }
     break;
   }

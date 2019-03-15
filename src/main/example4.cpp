@@ -188,13 +188,20 @@ int main(int argc, char **argv) {
 
     // uint32_t syncSlotDur = std::ceil(5 / (1500 / 8.) * 1000);
     // uint32_t maxDataSlotDur = std::ceil(300 / (1500 / 8.) * 1000);
-    uint32_t syncSlotDur = 1000;
-    uint32_t maxDataSlotDur = 5000;
-    macLayer->SetRtsSlotDur(syncSlotDur);
-    macLayer->SetMaxDataSlotDur(maxDataSlotDur);
+    uint32_t syncSlotDur = 200;
+    uint32_t maxDataSlotDur = 1000;
+
     macLayer->SetStream(service);
     macLayer->SetAddr(add);
+    macLayer->SetDevBitRate(1800);
+    macLayer->SetDevIntrinsicDelay(85.282906);
+    macLayer->SetMaxDistance(15);
+    macLayer->SetPropSpeed(3e8);
     macLayer->SetNumberOfNodes(dcmacMaxNodes);
+
+    macLayer->SetMaxDataSlotDur(maxDataSlotDur);
+    macLayer->SetRtsSlotDur(syncSlotDur);
+    macLayer->UpdateSlotDurFromEstimation();
     DcMac::Mode mode;
     if (dcmacmaster) {
       mode = DcMac::Mode::master;

@@ -19,7 +19,7 @@ namespace dccomms_examples {
 
 typedef uint8_t DcMacInfoField;
 typedef uint8_t DcMacPSizeField;
-typedef uint32_t DcMacTimeField;
+typedef uint16_t DcMacTimeField;
 
 class DcMacPacket : public Packet {
 public:
@@ -29,8 +29,8 @@ public:
   void SetSrc(uint8_t add);
   void SetType(Type type);
   Type GetType();
-  void SetTime(const uint32_t &tt);
-  uint32_t GetTime();
+  void SetTime(const DcMacTimeField &tt);
+  DcMacTimeField GetTime();
 
   uint8_t GetDst();
   uint8_t GetSrc();
@@ -53,7 +53,7 @@ public:
   bool PacketIsOk();
 
   void UpdateFCS();
-  static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, TIME_SIZE = 4,
+  static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, TIME_SIZE = 2,
                    PAYLOAD_SIZE_FIELD = 1, MAX_PAYLOAD_SIZE = UINT8_MAX,
                    FCS_SIZE = 2; // CRC16
 private:
@@ -101,6 +101,12 @@ public:
   void Start();
   void SetRtsSlotDur(const uint32_t &slotdur);
   void SetMaxDataSlotDur(const uint32_t &slotdur);
+  void SetDevBitRate(const uint32_t & bitrate); //bps
+  void SetDevIntrinsicDelay(const double & delay); //millis
+  void SetPropSpeed(const double & propspeed); //m/s
+  void SetMaxDistance(const double & distance); //m
+  void UpdateSlotDurFromEstimation();
+  double GetPktTransmissionMillis(const uint32_t & size);
 
   virtual void ReadPacket(const PacketPtr &pkt) override;
   virtual void WritePacket(const PacketPtr &pkt) override;
@@ -136,7 +142,7 @@ private:
   Ptr<DcMacPacketBuilder> _pb;
   PacketPtr _flushPkt;
   uint16_t _addr, _maxNodes;
-  uint32_t _time; // millis
+  DcMacTimeField _time; // millis
 
   std::mutex _rxfifo_mutex, _txfifo_mutex;
   std::condition_variable _rxfifo_cond, _txfifo_cond;
@@ -147,10 +153,14 @@ private:
   std::thread _tx, _rx;
   std::mutex _status_mutex;
   std::condition_variable _status_cond;
-  uint32_t _rtsSlotDur;     // millis
+  uint32_t _rtsCtsSlotDur;     // millis
   uint32_t _maxDataSlotDur; // millis
   uint32_t _currentRtsSlot;
   uint32_t _givenDataTime;
+  uint32_t _devBitRate; //bps
+  double _devIntrinsicDelay; //millis
+  double _propSpeed; //m/s
+  double _maxDistance; //m
 };
 
 } // namespace dccomms_examples
