@@ -363,6 +363,7 @@ void DcMac::SlaveRunTx() {
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
+      Log->debug("TX: SYNC RX!");
       _status = waitnextcycle;
       lock.unlock();
       DcMacPacketPtr pkt(new DcMacPacket());
@@ -445,17 +446,27 @@ void DcMac::MasterRunTx() {
       this_thread::sleep_for(milliseconds(minEnd2End));
 
       for (int s = 0; s < _maxNodes; s++) {
-        std::unique_lock<std::mutex> statusLock(_status_mutex);
-        _status_cond.wait_for(statusLock, milliseconds(_rtsCtsSlotDur));
+        bool slotEnd = false;
         _currentRtsSlot += 1;
-        if (_status == rtsreceived) {
-          Log->debug("RTS received from slave {}", _currentRtsSlot);
-        } else {
-          _time = RelativeTime::GetMillis();
-          Log->warn("Timeout waiting for rts packet from slave {}. Time: {}",
-                    _currentRtsSlot, _time);
-        }
         _status = waitrts;
+        auto wakeuptime =
+            std::chrono::system_clock::now() + milliseconds(_rtsCtsSlotDur);
+
+        while (!slotEnd) {
+          std::unique_lock<std::mutex> statusLock(_status_mutex);
+
+          auto res = _status_cond.wait_until(statusLock, wakeuptime);
+          if (res == std::cv_status::no_timeout && _status == rtsreceived) {
+            Log->debug("RTS received from slave {}", _currentRtsSlot);
+          } else if (res == std::cv_status::timeout) {
+            _time = RelativeTime::GetMillis();
+            if (_status != rtsreceived)
+              Log->warn(
+                  "Timeout waiting for rts packet from slave {}. Time: {}",
+                  _currentRtsSlot, _time);
+            slotEnd = true;
+          }
+        }
       }
 
       // Check if there are packets in txfifo
