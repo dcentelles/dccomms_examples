@@ -135,13 +135,20 @@ private:
   void PushNewRxPacket(PacketPtr);
   void PushNewTxPacket(PacketPtr);
   unsigned int GetRxFifoSize();
+  void InitSlaveRtsReqs(bool reinitCtsCounter = false);
+
+  struct SlaveRTS{
+      bool req;
+      uint16_t reqmillis;
+      uint32_t ctsBytes;
+  };
 
   Mode _mode;
   Status _status;
   CommsDeviceServicePtr _stream;
   Ptr<DcMacPacketBuilder> _pb;
   PacketPtr _flushPkt;
-  uint16_t _addr, _maxNodes;
+  uint16_t _addr, _maxSlaves;
   DcMacTimeField _time; // millis
 
   std::mutex _rxfifo_mutex, _txfifo_mutex;
@@ -161,6 +168,8 @@ private:
   double _devIntrinsicDelay; //millis
   double _propSpeed; //m/s
   double _maxDistance; //m
+  std::vector<SlaveRTS> _slaveRtsReqs;
+  uint32_t _rtsSlave;
 };
 
 } // namespace dccomms_examples

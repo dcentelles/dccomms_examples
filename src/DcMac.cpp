@@ -227,8 +227,27 @@ void DcMac::SetMode(const Mode &mode) {
 }
 
 void DcMac::SetNumberOfNodes(const uint16_t num) {
-  _maxNodes = num;
-  Log->debug("Max. nodes: {}", _maxNodes);
+  _maxSlaves = num;
+  _slaveRtsReqs.clear();
+  for (int add = 0; add < _maxSlaves; add++) {
+    SlaveRTS slaveRts;
+    _slaveRtsReqs.push_back(slaveRts);
+  }
+  Log->debug("Max. nodes: {}", _maxSlaves);
+}
+
+void DcMac::InitSlaveRtsReqs(bool reinitCtsCounter) {
+  if (!reinitCtsCounter)
+    for (SlaveRTS data : _slaveRtsReqs) {
+      data.req = false;
+      data.reqmillis = 0;
+    }
+  else
+    for (SlaveRTS data : _slaveRtsReqs) {
+      data.req = false;
+      data.reqmillis = 0;
+      data.ctsBytes = 0;
+    }
 }
 
 DcMac::Mode DcMac::GetMode() {
@@ -245,6 +264,7 @@ void DcMac::SetStream(CommsDeviceServicePtr stream) { _stream = stream; }
 
 void DcMac::Start() {
   _time = RelativeTime::GetMillis();
+  InitSlaveRtsReqs(true);
   DiscardPacketsInRxFIFO();
   if (_mode == master) {
     MasterRunRx();
@@ -358,13 +378,17 @@ void DcMac::SlaveRunTx() {
    * Este proceso se encarga de enviar los paquetes
    */
   _tx = std::thread([this]() {
+    auto rtsSlotDelay = milliseconds((_addr - 1) * _rtsCtsSlotDur);
+    auto ctsSlotDelay = milliseconds(_maxSlaves * _rtsCtsSlotDur);
     while (1) {
       std::unique_lock<std::mutex> lock(_status_mutex);
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
+      auto now = std::chrono::system_clock::now();
       Log->debug("TX: SYNC RX!");
-      _status = waitnextcycle;
+      // TODO: only send when there is data to send
+      _status = waitcts;
       lock.unlock();
       DcMacPacketPtr pkt(new DcMacPacket());
       pkt->SetDst(0);
@@ -372,15 +396,29 @@ void DcMac::SlaveRunTx() {
       pkt->SetType(DcMacPacket::rts);
       pkt->SetTime(100);
       pkt->UpdateFCS();
-      uint32_t rtsSlotDelay = (_addr - 1) * _rtsCtsSlotDur;
+      auto rtsWakeUp = now + rtsSlotDelay;
+      auto ctsWakeUp = now + ctsSlotDelay;
 
-      this_thread::sleep_for(milliseconds(rtsSlotDelay));
-
-      if (pkt->PacketIsOk()) {
-        _stream << pkt;
-        Log->debug("Send rts {}", RelativeTime::GetMillis());
-      } else {
-        Log->critical("Internal error. packet has errors");
+      this_thread::sleep_until(rtsWakeUp);
+      _stream << pkt;
+      Log->debug("Send RTS {}", RelativeTime::GetMillis());
+      this_thread::sleep_until(ctsWakeUp);
+      while (_status == waitcts) {
+        std::unique_lock<std::mutex> statusLock(_status_mutex);
+        _status_cond.wait(statusLock);
+        if (_status == ctsreceived) {
+          // SEND DATA
+          DcMacPacketPtr dataPkt = CreateObject<DcMacPacket>();
+          dataPkt->SetType(DcMacPacket::data);
+          dataPkt->SetDestAddr(0);
+          dataPkt->SetSrcAddr(_addr);
+          auto dataPktSize =
+              (_givenDataTime / 1000. - _devIntrinsicDelay) * _devBitRate;
+          dataPkt->PayloadUpdated(dataPktSize);
+          dataPkt->UpdateFCS();
+          _stream << dataPkt;
+          Log->debug("SEND DATA {}", dataPktSize);
+        }
       }
     }
   });
@@ -445,7 +483,8 @@ void DcMac::MasterRunTx() {
           ((pktSize * 8) / _devBitRate) * 1000 + _devIntrinsicDelay;
       this_thread::sleep_for(milliseconds(minEnd2End));
 
-      for (int s = 0; s < _maxNodes; s++) {
+      InitSlaveRtsReqs();
+      for (int s = 0; s < _maxSlaves; s++) {
         bool slotEnd = false;
         _currentRtsSlot += 1;
         _status = waitrts;
@@ -457,7 +496,15 @@ void DcMac::MasterRunTx() {
 
           auto res = _status_cond.wait_until(statusLock, wakeuptime);
           if (res == std::cv_status::no_timeout && _status == rtsreceived) {
-            Log->debug("RTS received from slave {}", _currentRtsSlot);
+            if (_rtsSlave == _currentRtsSlot) {
+              Log->debug("RTS received from slave {}", _currentRtsSlot);
+              SlaveRTS *rts = &_slaveRtsReqs[_rtsSlave - 1];
+              rts->req = true;
+              rts->reqmillis = _givenDataTime;
+
+            } else {
+              Log->warn("RTS received from wrong slave");
+            }
           } else if (res == std::cv_status::timeout) {
             _time = RelativeTime::GetMillis();
             if (_status != rtsreceived)
@@ -468,6 +515,54 @@ void DcMac::MasterRunTx() {
           }
         }
       }
+
+      SlaveRTS *winnerSlave = 0;
+      uint32_t ctsBytes = UINT32_MAX;
+      uint16_t slaveAddr;
+      for (int i = 0; i < _maxSlaves; i++) {
+        SlaveRTS *data = &_slaveRtsReqs[i];
+        if (data->req) {
+          if (ctsBytes > data->ctsBytes) {
+            ctsBytes = data->ctsBytes;
+            winnerSlave = data;
+            slaveAddr = i;
+          }
+        }
+      }
+      if (winnerSlave) {
+        DcMacPacketPtr syncPkt(new DcMacPacket());
+        syncPkt->SetDst(slaveAddr);
+        syncPkt->SetSrc(_addr);
+        syncPkt->SetType(DcMacPacket::cts);
+        syncPkt->SetTime(winnerSlave->reqmillis);
+        syncPkt->UpdateFCS();
+        if (syncPkt->PacketIsOk()) {
+          Log->debug("Send CTS to {}", slaveAddr);
+          _stream << syncPkt;
+          auto wakeuptime =
+              std::chrono::system_clock::now() +
+              milliseconds(_rtsCtsSlotDur + winnerSlave->reqmillis * 2);
+          bool datareceived = false, slotEnd = false;
+          while (!datareceived && !slotEnd) {
+            std::unique_lock<std::mutex> statusLock(_status_mutex);
+            auto res = _status_cond.wait_until(statusLock, wakeuptime);
+            if (res == std::cv_status::no_timeout && _status == datareceived) {
+              Log->debug("Data received from slave {}", slaveAddr);
+            } else if (res == std::cv_status::timeout) {
+              _time = RelativeTime::GetMillis();
+              if (_status != datareceived)
+                Log->warn(
+                    "Timeout waiting for data packet from slave {}. Time: {}",
+                    slaveAddr, _time);
+              slotEnd = true;
+            }
+          }
+
+        } else {
+          Log->critical("Internal error. packet has errors");
+        }
+      }
+      this_thread::sleep_for(milliseconds(10000));
 
       // Check if there are packets in txfifo
       std::unique_lock<std::mutex> txfifoLock(_txfifo_mutex);
@@ -511,13 +606,14 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::cts: {
-    _givenDataTime = pkt->GetTime();
     Log->warn("CTS received");
     break;
   }
   case DcMacPacket::rts: {
     Log->debug("RTS received {}", RelativeTime::GetMillis());
     _status = rtsreceived;
+    _givenDataTime = pkt->GetTime();
+    _rtsSlave = pkt->GetSrcAddr();
     break;
   }
   case DcMacPacket::data: {
