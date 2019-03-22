@@ -97,7 +97,6 @@ public:
   void SetMode(const Mode &mode);
   void SetNumberOfNodes(const uint16_t num);
   Mode GetMode();
-  void SetStream(CommsDeviceServicePtr stream);
   void Start();
   void SetRtsSlotDur(const uint32_t &slotdur);
   void SetMaxDataSlotDur(const uint32_t &slotdur);
@@ -107,6 +106,7 @@ public:
   void SetMaxDistance(const double & distance); //m
   void UpdateSlotDurFromEstimation();
   double GetPktTransmissionMillis(const uint32_t & size);
+  void SetCommsDeviceId(const string & id);
 
   virtual void ReadPacket(const PacketPtr &pkt) override;
   virtual void WritePacket(const PacketPtr &pkt) override;
@@ -143,6 +143,7 @@ private:
       uint32_t ctsBytes;
   };
 
+  std::string _dccommsId;
   Mode _mode;
   Status _status;
   CommsDeviceServicePtr _stream;

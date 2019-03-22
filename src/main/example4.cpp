@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
     uint32_t syncSlotDur = 200;
     uint32_t maxDataSlotDur = 1000;
 
-    macLayer->SetStream(service);
+    macLayer->SetCommsDeviceId(nodeName);
     macLayer->SetAddr(add);
     macLayer->SetDevBitRate(1800);
     macLayer->SetDevIntrinsicDelay(85.282906);
