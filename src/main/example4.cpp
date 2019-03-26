@@ -161,11 +161,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (dcmac && (rxPktType != VL || txPktType != VL)) {
-    std::cerr << "DcMAC only supports VariableLenghtPacket type (TODO)"
-              << std::endl;
-    return 1;
-  }
   uint8_t *dstPtr = txPacket->GetPayloadBuffer();
   uint16_t *seqPtr = (uint16_t *)(dstPtr + 1);
   uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
@@ -178,9 +173,6 @@ int main(int argc, char **argv) {
   uint32_t totalPacketSize = txPacketSize + packetSizeOffset;
   Ptr<StreamCommsDevice> node;
   Ptr<CommsDeviceService> service;
-  service = CreateObject<CommsDeviceService>(rxpb);
-  service->SetBlockingTransmission(false);
-  service->SetCommsDeviceId(nodeName);
   Ptr<DcMac> macLayer;
 
   if (dcmac) {
@@ -192,6 +184,7 @@ int main(int argc, char **argv) {
     uint32_t maxDataSlotDur = 1000;
 
     macLayer->SetCommsDeviceId(nodeName);
+    macLayer->SetPktBuilder(rxpb);
     macLayer->SetAddr(add);
     macLayer->SetDevBitRate(1800);
     macLayer->SetDevIntrinsicDelay(85.282906);
@@ -211,6 +204,9 @@ int main(int argc, char **argv) {
     macLayer->SetMode(mode);
     node = macLayer;
   } else {
+    service = CreateObject<CommsDeviceService>(rxpb);
+    service->SetBlockingTransmission(false);
+    service->SetCommsDeviceId(nodeName);
     node = service;
   }
 
@@ -236,9 +232,10 @@ int main(int argc, char **argv) {
   }
 
   node->SetLogLevel(debug);
-  service->Start();
   if (dcmac) {
     macLayer->Start();
+  } else {
+    service->Start();
   }
 
   std::thread tx, rx;

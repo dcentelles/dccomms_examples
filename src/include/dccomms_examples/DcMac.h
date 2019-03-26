@@ -37,6 +37,8 @@ public:
   uint8_t GetCurrentSlot();
   void SetCurrentSlot(const uint8_t &);
 
+  static int GetPayloadSizeFromPacketSize(int size);
+
   void SetDestAddr(uint32_t addr) { SetDst(addr); }
   void SetSrcAddr(uint32_t addr) { SetSrc(addr); }
   uint32_t GetDestAddr() { return GetDst(); }
@@ -107,6 +109,7 @@ public:
   void UpdateSlotDurFromEstimation();
   double GetPktTransmissionMillis(const uint32_t & size);
   void SetCommsDeviceId(const string & id);
+  void SetPktBuilder(const PacketBuilderPtr & pb);
 
   virtual void ReadPacket(const PacketPtr &pkt) override;
   virtual void WritePacket(const PacketPtr &pkt) override;
@@ -148,6 +151,7 @@ private:
   Status _status;
   CommsDeviceServicePtr _stream;
   Ptr<DcMacPacketBuilder> _pb;
+  PacketBuilderPtr _highPb;
   PacketPtr _flushPkt;
   uint16_t _addr, _maxSlaves;
   DcMacTimeField _time; // millis
