@@ -34,8 +34,6 @@ public:
 
   uint8_t GetDst();
   uint8_t GetSrc();
-  uint8_t GetCurrentSlot();
-  void SetCurrentSlot(const uint8_t &);
   void SetAckMask(const uint8_t &mask);
   uint8_t GetAckMask();
 

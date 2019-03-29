@@ -40,7 +40,7 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
     uint8_t payloadSize = *buffer;
     size = PAYLOAD_SIZE_FIELD + payloadSize;
   } else if (ptype == sync) { // sync
-    size = 0;
+    size = ACKFIELD_SIZE;
   } else if (ptype == ack) {
     size = ACKFIELD_SIZE;
   }
@@ -85,10 +85,11 @@ void DcMacPacket::Read(Stream *stream) {
       stream->Read(_variableArea, PAYLOAD_SIZE_FIELD);
       size = GetPayloadSize();
       end = _variableArea + PAYLOAD_SIZE_FIELD;
-    } else if (type == sync) { // sync
+    } else if (type == sync) { // sync (ack in)
+      stream->Read(_variableArea, ACKFIELD_SIZE);
       size = 0;
-      end = _variableArea;
-    } else if (type == ack) {
+      end = _variableArea + ACKFIELD_SIZE;
+    } else if (type == ack) { // not used
       stream->Read(_variableArea, ACKFIELD_SIZE);
       size = 0;
       end = _variableArea + ACKFIELD_SIZE;
@@ -132,8 +133,8 @@ void DcMacPacket::UpdateFCS() {
                             _prefixSize + PAYLOAD_SIZE_FIELD + *_payloadSize);
       _fcs = _variableArea + PAYLOAD_SIZE_FIELD + *_payloadSize;
     } else if (type == sync) { // sync
-      crc = Checksum::crc16(_add, _prefixSize);
-      _fcs = _variableArea;
+      crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE);
+      _fcs = _variableArea + ACKFIELD_SIZE;
     } else if (type == ack) {
       crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE);
       _fcs = _variableArea + ACKFIELD_SIZE;
@@ -157,7 +158,7 @@ bool DcMacPacket::_CheckFCS() {
       crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD +
                                       *_payloadSize + FCS_SIZE);
     } else if (type == sync) { // sync
-      crc = Checksum::crc16(_add, _prefixSize + FCS_SIZE);
+      crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE + FCS_SIZE);
     } else if (type == ack) {
       crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE + FCS_SIZE);
     }
@@ -168,15 +169,6 @@ bool DcMacPacket::_CheckFCS() {
 }
 
 bool DcMacPacket::PacketIsOk() { return _CheckFCS(); }
-
-void DcMacPacket::SetCurrentSlot(const uint8_t &slot) {
-  *_flags = *_flags | slot << 2;
-}
-
-uint8_t DcMacPacket::GetCurrentSlot() {
-  uint8_t slot = *_flags >> 2;
-  return slot;
-}
 
 void DcMacPacket::SetDst(uint8_t add) {
   *_add = (*_add & 0xf0) | (add & 0xf);
@@ -417,6 +409,11 @@ void DcMac::SlaveRunTx() {
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
+      if (_ackMask & (1 << (_addr - 1))) {
+        Log->debug("DATA SUCCESS");
+      } else {
+        Log->warn("DATA LOST");
+      }
       auto now = std::chrono::system_clock::now();
       Log->debug("TX: SYNC RX!");
       // TODO: only send when there is data to send
@@ -508,8 +505,7 @@ void DcMac::MasterRunTx() {
       syncPkt->SetDst(0xf);
       syncPkt->SetSrc(_addr);
       syncPkt->SetType(DcMacPacket::sync);
-      syncPkt->SetTime(_time);
-      syncPkt->SetCurrentSlot(0);
+      syncPkt->SetAckMask(_ackMask);
       syncPkt->UpdateFCS();
       if (syncPkt->PacketIsOk()) {
         _stream << syncPkt;
@@ -555,7 +551,7 @@ void DcMac::MasterRunTx() {
         }
       }
       bool req = true;
-      uint8_t receivedData = 0;
+      _ackMask = 0;
       while (req) {
         SlaveRTS *winnerSlave = 0;
         uint32_t ctsBytes = UINT32_MAX;
@@ -596,7 +592,7 @@ void DcMac::MasterRunTx() {
               if (res == std::cv_status::no_timeout &&
                   _status == datareceived) {
                 Log->debug("Data received from slave {}", slaveAddr);
-                receivedData |= (1 << (slaveAddr - 1));
+                _ackMask |= (1 << (slaveAddr - 1));
               } else if (res == std::cv_status::timeout) {
                 _time = RelativeTime::GetMillis();
                 if (_status != datareceived)
@@ -610,19 +606,6 @@ void DcMac::MasterRunTx() {
           } else {
             Log->critical("Internal error. packet has errors");
           }
-        }
-      }
-      if (receivedData) {
-        // Send ACK
-        DcMacPacketPtr ackPkt(new DcMacPacket());
-        ackPkt->SetDst(0xff);
-        ackPkt->SetSrc(_addr);
-        ackPkt->SetType(DcMacPacket::ack);
-        ackPkt->SetAckMask(receivedData);
-        ackPkt->UpdateFCS();
-        if (ackPkt->PacketIsOk()) {
-          Log->debug("Send ACKs");
-          _stream << ackPkt;
         }
       }
       this_thread::sleep_for(milliseconds(10));
@@ -706,6 +689,7 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
   switch (type) {
   case DcMacPacket::sync: {
     RelativeTime::Reset();
+    _ackMask = pkt->GetAckMask();
     _status = DcMac::syncreceived;
     Log->debug("SYNC received");
     break;
