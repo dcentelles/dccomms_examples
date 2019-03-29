@@ -23,7 +23,7 @@ typedef uint16_t DcMacTimeField;
 
 class DcMacPacket : public Packet {
 public:
-  enum Type { sync = 0, rts, cts, data, unknown };
+  enum Type { sync = 0, rts, cts, data, ack, unknown };
   DcMacPacket();
   void SetDst(uint8_t add);
   void SetSrc(uint8_t add);
@@ -36,6 +36,8 @@ public:
   uint8_t GetSrc();
   uint8_t GetCurrentSlot();
   void SetCurrentSlot(const uint8_t &);
+  void SetAckMask(const uint8_t &mask);
+  uint8_t GetAckMask();
 
   static int GetPayloadSizeFromPacketSize(int size);
 
@@ -57,6 +59,7 @@ public:
   void UpdateFCS();
   static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, TIME_SIZE = 2,
                    PAYLOAD_SIZE_FIELD = 1, MAX_PAYLOAD_SIZE = UINT8_MAX,
+                   ACKFIELD_SIZE = 1,
                    FCS_SIZE = 2; // CRC16
 private:
   int _maxPacketSize;
@@ -66,6 +69,7 @@ private:
   DcMacInfoField *_flags;
   DcMacTimeField *_time;
   DcMacPSizeField *_payloadSize;
+  DcMacInfoField *_ackMask;
   uint8_t *_variableArea;
   uint8_t *_payload;
   uint8_t *_fcs;
@@ -92,7 +96,19 @@ public:
 class DcMac : public StreamCommsDevice {
 public:
   enum Mode { master, slave };
-  enum Status { waitrts, waitcts, waitdata, waitack, idle, syncreceived, waitnextcycle, ctsreceived, rtsreceived, datareceived};
+  enum Status {
+    waitrts,
+    waitcts,
+    waitdata,
+    waitack,
+    idle,
+    ackreceived,
+    syncreceived,
+    waitnextcycle,
+    ctsreceived,
+    rtsreceived,
+    datareceived
+  };
   DcMac();
   void SetAddr(const uint16_t &addr);
   uint16_t GetAddr();
@@ -102,14 +118,14 @@ public:
   void Start();
   void SetRtsSlotDur(const uint32_t &slotdur);
   void SetMaxDataSlotDur(const uint32_t &slotdur);
-  void SetDevBitRate(const uint32_t & bitrate); //bps
-  void SetDevIntrinsicDelay(const double & delay); //millis
-  void SetPropSpeed(const double & propspeed); //m/s
-  void SetMaxDistance(const double & distance); //m
+  void SetDevBitRate(const uint32_t &bitrate);    // bps
+  void SetDevIntrinsicDelay(const double &delay); // millis
+  void SetPropSpeed(const double &propspeed);     // m/s
+  void SetMaxDistance(const double &distance);    // m
   void UpdateSlotDurFromEstimation();
-  double GetPktTransmissionMillis(const uint32_t & size);
-  void SetCommsDeviceId(const string & id);
-  void SetPktBuilder(const PacketBuilderPtr & pb);
+  double GetPktTransmissionMillis(const uint32_t &size);
+  void SetCommsDeviceId(const string &id);
+  void SetPktBuilder(const PacketBuilderPtr &pb);
 
   virtual void ReadPacket(const PacketPtr &pkt) override;
   virtual void WritePacket(const PacketPtr &pkt) override;
@@ -140,10 +156,10 @@ private:
   unsigned int GetRxFifoSize();
   void InitSlaveRtsReqs(bool reinitCtsCounter = false);
 
-  struct SlaveRTS{
-      bool req;
-      uint16_t reqmillis;
-      uint32_t ctsBytes;
+  struct SlaveRTS {
+    bool req;
+    uint16_t reqmillis;
+    uint32_t ctsBytes;
   };
 
   std::string _dccommsId;
@@ -165,16 +181,18 @@ private:
   std::thread _tx, _rx;
   std::mutex _status_mutex;
   std::condition_variable _status_cond;
-  uint32_t _rtsCtsSlotDur;     // millis
+  uint32_t _rtsCtsSlotDur;  // millis
   uint32_t _maxDataSlotDur; // millis
   uint32_t _currentRtsSlot;
   uint32_t _givenDataTime;
-  uint32_t _devBitRate; //bps
-  double _devIntrinsicDelay; //millis
-  double _propSpeed; //m/s
-  double _maxDistance; //m
+  uint32_t _devBitRate;      // bps
+  double _devIntrinsicDelay; // millis
+  double _propSpeed;         // m/s
+  double _maxDistance;       // m
   std::vector<SlaveRTS> _slaveRtsReqs;
   uint32_t _rtsSlave;
+  uint8_t _ackMask;
+  bool _ackReceived;
 };
 
 } // namespace dccomms_examples
