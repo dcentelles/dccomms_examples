@@ -537,55 +537,63 @@ void DcMac::MasterRunTx() {
           }
         }
       }
-
-      SlaveRTS *winnerSlave = 0;
-      uint32_t ctsBytes = UINT32_MAX;
-      uint16_t slaveAddr;
-      for (int i = 0; i < _maxSlaves; i++) {
-        SlaveRTS *data = &_slaveRtsReqs[i];
-        if (data->req) {
-          if (ctsBytes > data->ctsBytes) {
-            ctsBytes = data->ctsBytes;
-            winnerSlave = data;
-            slaveAddr = i + 1;
-          }
-        }
-      }
-      if (winnerSlave) {
-        DcMacPacketPtr ctsPkt(new DcMacPacket());
-        ctsPkt->SetDst(slaveAddr);
-        ctsPkt->SetSrc(_addr);
-        ctsPkt->SetType(DcMacPacket::cts);
-        ctsPkt->SetTime(winnerSlave->reqmillis);
-        ctsPkt->UpdateFCS();
-        winnerSlave->ctsBytes += winnerSlave->reqmillis;
-        if (ctsPkt->PacketIsOk()) {
-          Log->debug("Send CTS to {}", slaveAddr);
-          _stream << ctsPkt;
-          auto wakeuptime =
-              std::chrono::system_clock::now() +
-              milliseconds(static_cast<int>(
-                  std::ceil(_rtsCtsSlotDur + winnerSlave->reqmillis * 1)));
-          bool slotEnd = false;
-          while (_status != datareceived && !slotEnd) {
-            std::unique_lock<std::mutex> statusLock(_status_mutex);
-            auto res = _status_cond.wait_until(statusLock, wakeuptime);
-            if (res == std::cv_status::no_timeout && _status == datareceived) {
-              Log->debug("Data received from slave {}", slaveAddr);
-            } else if (res == std::cv_status::timeout) {
-              _time = RelativeTime::GetMillis();
-              if (_status != datareceived)
-                Log->warn(
-                    "Timeout waiting for data packet from slave {}. Time: {}",
-                    slaveAddr, _time);
-              slotEnd = true;
+      bool req = true;
+      while (req) {
+        SlaveRTS *winnerSlave = 0;
+        uint32_t ctsBytes = UINT32_MAX;
+        uint16_t slaveAddr;
+        req = false;
+        for (int i = 0; i < _maxSlaves; i++) {
+          SlaveRTS *data = &_slaveRtsReqs[i];
+          if (data->req) {
+            req = true;
+            if (ctsBytes > data->ctsBytes) {
+              ctsBytes = data->ctsBytes;
+              winnerSlave = data;
+              slaveAddr = i + 1;
             }
           }
+        }
+        if (winnerSlave) {
+          _status = DcMac::waitdata; //Should be set in mutex context
+          winnerSlave->req = false;
+          DcMacPacketPtr ctsPkt(new DcMacPacket());
+          ctsPkt->SetDst(slaveAddr);
+          ctsPkt->SetSrc(_addr);
+          ctsPkt->SetType(DcMacPacket::cts);
+          ctsPkt->SetTime(winnerSlave->reqmillis);
+          ctsPkt->UpdateFCS();
+          winnerSlave->ctsBytes += winnerSlave->reqmillis;
+          if (ctsPkt->PacketIsOk()) {
+            Log->debug("Send CTS to {}", slaveAddr);
+            _stream << ctsPkt;
+            auto wakeuptime =
+                std::chrono::system_clock::now() +
+                milliseconds(static_cast<int>(
+                    std::ceil(_rtsCtsSlotDur + winnerSlave->reqmillis * 1)));
+            bool slotEnd = false;
+            while (_status != datareceived && !slotEnd) {
+              std::unique_lock<std::mutex> statusLock(_status_mutex);
+              auto res = _status_cond.wait_until(statusLock, wakeuptime);
+              if (res == std::cv_status::no_timeout &&
+                  _status == datareceived) {
+                Log->debug("Data received from slave {}", slaveAddr);
+              } else if (res == std::cv_status::timeout) {
+                _time = RelativeTime::GetMillis();
+                if (_status != datareceived)
+                  Log->warn(
+                      "Timeout waiting for data packet from slave {}. Time: {}",
+                      slaveAddr, _time);
+                slotEnd = true;
+              }
+            }
 
-        } else {
-          Log->critical("Internal error. packet has errors");
+          } else {
+            Log->critical("Internal error. packet has errors");
+          }
         }
       }
+
       this_thread::sleep_for(milliseconds(10));
 
       // Check if there are packets in txfifo
@@ -679,7 +687,7 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
       _status = DcMac::ctsreceived;
     } else {
       Log->debug("CTS detected");
-      _status = DcMac::waitnextcycle;
+      _status = DcMac::waitcts;
     }
     break;
   }
