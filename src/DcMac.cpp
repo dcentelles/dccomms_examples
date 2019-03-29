@@ -228,6 +228,9 @@ DcMac::DcMac() {
   _devBitRate = 1e4;
   SetLogName("DcMac");
   LogToConsole(true);
+  _txDataPacket = CreateObject<DcMacPacket>();
+  _txDataPacket->SetType(DcMacPacket::data);
+  _sendingDataPacket = false;
 }
 
 void DcMac::SetAddr(const uint16_t &addr) {
@@ -307,7 +310,7 @@ void DcMac::SetMaxDataSlotDur(const uint32_t &slotdur) {
 
 void DcMac::SetRtsSlotDur(const uint32_t &slotdur) { _rtsCtsSlotDur = slotdur; }
 void DcMac::ReadPacket(const PacketPtr &pkt) {
-  PacketPtr npkt = GetNextRxPacket();
+  PacketPtr npkt = GetAndPopNextRxPacket();
   pkt->CopyFromRawBuffer(npkt->GetBuffer());
 }
 
@@ -321,7 +324,7 @@ void DcMac::DiscardPacketsInRxFIFO() {
   }
 }
 
-PacketPtr DcMac::GetNextRxPacket() {
+PacketPtr DcMac::GetAndPopNextRxPacket() {
   std::unique_lock<std::mutex> lock(_rxfifo_mutex);
   while (_rxfifo.empty()) {
     _rxfifo_cond.wait(lock);
@@ -333,7 +336,7 @@ PacketPtr DcMac::GetNextRxPacket() {
   return dlf;
 }
 
-PacketPtr DcMac::GetNextTxPacket() {
+PacketPtr DcMac::GetAndPopNextTxPacket() {
   std::unique_lock<std::mutex> lock(_txfifo_mutex);
   while (_txfifo.empty()) {
     _txfifo_cond.wait(lock);
@@ -342,6 +345,24 @@ PacketPtr DcMac::GetNextTxPacket() {
   auto size = dlf->GetPacketSize();
   _txfifo.pop();
   _txQueueSize -= size;
+  return dlf;
+}
+
+PacketPtr DcMac::GetLastTxPacket() {
+  std::unique_lock<std::mutex> lock(_txfifo_mutex);
+  PacketPtr dlf;
+  if (!_txfifo.empty())
+    dlf = _txfifo.front();
+  return dlf;
+}
+
+PacketPtr DcMac::PopLastTxPacket() {
+  std::unique_lock<std::mutex> lock(_txfifo_mutex);
+  PacketPtr dlf;
+  if (!_txfifo.empty()) {
+    dlf = _txfifo.front();
+    _txfifo.pop();
+  }
   return dlf;
 }
 
@@ -409,11 +430,30 @@ void DcMac::SlaveRunTx() {
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
-      if (_ackMask & (1 << (_addr - 1))) {
-        Log->debug("DATA SUCCESS");
-      } else {
-        Log->warn("DATA LOST");
+      if (_sendingDataPacket) {
+        if (_ackMask & (1 << (_addr - 1))) {
+          Log->debug("DATA SUCCESS");
+          _sendingDataPacket = false;
+        } else {
+          Log->warn("DATA LOST");
+        }
       }
+      if (!_sendingDataPacket) {
+        PacketPtr pkt = GetLastTxPacket();
+        if (pkt) {
+          _sendingDataPacketSize = pkt->GetPacketSize();
+          _txDataPacket->SetDestAddr(pkt->GetDestAddr());
+          _txDataPacket->SetSrcAddr(_addr);
+          _txDataPacket->SetPayload(pkt->GetBuffer(), _sendingDataPacketSize);
+          _txDataPacket->UpdateFCS();
+          _sendingDataPacket = true;
+          Log->debug("Start iteration for sending packet");
+        }
+      }
+      if (!_sendingDataPacket) {
+        continue;
+      }
+
       auto now = std::chrono::system_clock::now();
       Log->debug("TX: SYNC RX!");
       // TODO: only send when there is data to send
@@ -423,7 +463,8 @@ void DcMac::SlaveRunTx() {
       pkt->SetDst(0);
       pkt->SetSrc(_addr);
       pkt->SetType(DcMacPacket::rts);
-      pkt->SetTime(200 * 8. / _devBitRate * 1000 + _devIntrinsicDelay);
+      pkt->SetTime(_sendingDataPacketSize * 8. / _devBitRate * 1000 +
+                   _devIntrinsicDelay);
       pkt->UpdateFCS();
       auto rtsWakeUp = now + rtsSlotDelay;
       auto ctsWakeUp = now + ctsSlotDelay;
@@ -437,18 +478,18 @@ void DcMac::SlaveRunTx() {
         _status_cond.wait(statusLock);
         if (_status == ctsreceived) {
           // SEND DATA
-          DcMacPacketPtr dataPkt = CreateObject<DcMacPacket>();
-          dataPkt->SetType(DcMacPacket::data);
-          dataPkt->SetDestAddr(0);
-          dataPkt->SetSrcAddr(_addr);
-          auto dataPktSize = static_cast<uint16_t>(std::ceil(
-              (_givenDataTime - _devIntrinsicDelay) / 1000. * _devBitRate / 8));
-          dataPkt->PayloadUpdated(
-              dataPkt->GetPayloadSizeFromPacketSize(dataPktSize));
-          dataPkt->UpdateFCS();
-          if (dataPkt->PacketIsOk()) {
-            _stream << dataPkt;
-            Log->debug("SEND DATA {}", dataPktSize);
+//          DcMacPacketPtr dataPkt = CreateObject<DcMacPacket>();
+//          dataPkt->SetType(DcMacPacket::data);
+//          dataPkt->SetDestAddr(0);
+//          dataPkt->SetSrcAddr(_addr);
+//          auto dataPktSize = static_cast<uint16_t>(std::ceil(
+//              (_givenDataTime - _devIntrinsicDelay) / 1000. * _devBitRate / 8));
+//          dataPkt->PayloadUpdated(
+//              dataPkt->GetPayloadSizeFromPacketSize(dataPktSize));
+//          dataPkt->UpdateFCS();
+          if (_txDataPacket->PacketIsOk()) {
+            _stream << _txDataPacket;
+            Log->debug("SEND DATA {}", _sendingDataPacketSize);
           } else {
             Log->critical("data packet corrupt before transmitting");
           }
@@ -669,10 +710,9 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     _status = datareceived;
     if (dst == _addr) {
       Log->debug("DATA received");
-      // TODO:
-      // auto npkt = _highPb->Create();
-      // npkt->CopyFromRawBuffer(pkt->GetPayloadBuffer());
-      // PushNewRxPacket(pkt);
+      auto npkt = _highPb->Create();
+      npkt->CopyFromRawBuffer(pkt->GetPayloadBuffer());
+      PushNewRxPacket(pkt);
     } else {
       Log->debug("DATA detected");
     }
@@ -735,6 +775,14 @@ unsigned int DcMac::GetRxFifoSize() {
   _rxfifo_mutex.lock();
   size = _rxQueueSize;
   _rxfifo_mutex.unlock();
+  return size;
+}
+
+unsigned int DcMac::GetTxFifoSize() {
+  unsigned int size;
+  _txfifo_mutex.lock();
+  size = _txQueueSize;
+  _txfifo_mutex.unlock();
   return size;
 }
 

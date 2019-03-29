@@ -147,11 +147,14 @@ private:
   void MasterRunTx();
   void MasterProcessRxPacket(const DcMacPacketPtr &pkt);
   void SlaveProcessRxPacket(const DcMacPacketPtr &pkt);
-  PacketPtr GetNextRxPacket();
-  PacketPtr GetNextTxPacket();
+  PacketPtr GetAndPopNextRxPacket();
+  PacketPtr GetAndPopNextTxPacket();
+  PacketPtr GetLastTxPacket();
+  PacketPtr PopLastTxPacket();
   void PushNewRxPacket(PacketPtr);
   void PushNewTxPacket(PacketPtr);
   unsigned int GetRxFifoSize();
+  unsigned int GetTxFifoSize();
   void InitSlaveRtsReqs(bool reinitCtsCounter = false);
 
   struct SlaveRTS {
@@ -169,6 +172,7 @@ private:
   PacketPtr _flushPkt;
   uint16_t _addr, _maxSlaves;
   DcMacTimeField _time; // millis
+  DcMacPacketPtr _txDataPacket;
 
   std::mutex _rxfifo_mutex, _txfifo_mutex;
   std::condition_variable _rxfifo_cond, _txfifo_cond;
@@ -191,6 +195,8 @@ private:
   uint32_t _rtsSlave;
   uint8_t _ackMask;
   bool _ackReceived;
+  bool _sendingDataPacket;
+  bool _sendingDataPacketSize;
 };
 
 } // namespace dccomms_examples
