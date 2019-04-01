@@ -310,7 +310,7 @@ void DcMac::SetMaxDataSlotDur(const uint32_t &slotdur) {
 
 void DcMac::SetRtsSlotDur(const uint32_t &slotdur) { _rtsCtsSlotDur = slotdur; }
 void DcMac::ReadPacket(const PacketPtr &pkt) {
-  PacketPtr npkt = GetAndPopNextRxPacket();
+  PacketPtr npkt = WaitForNextRxPacket();
   pkt->CopyFromRawBuffer(npkt->GetBuffer());
 }
 
@@ -324,7 +324,7 @@ void DcMac::DiscardPacketsInRxFIFO() {
   }
 }
 
-PacketPtr DcMac::GetAndPopNextRxPacket() {
+PacketPtr DcMac::WaitForNextRxPacket() {
   std::unique_lock<std::mutex> lock(_rxfifo_mutex);
   while (_rxfifo.empty()) {
     _rxfifo_cond.wait(lock);
@@ -336,7 +336,7 @@ PacketPtr DcMac::GetAndPopNextRxPacket() {
   return dlf;
 }
 
-PacketPtr DcMac::GetAndPopNextTxPacket() {
+PacketPtr DcMac::WaitForNextTxPacket() {
   std::unique_lock<std::mutex> lock(_txfifo_mutex);
   while (_txfifo.empty()) {
     _txfifo_cond.wait(lock);
@@ -361,6 +361,8 @@ PacketPtr DcMac::PopLastTxPacket() {
   PacketPtr dlf;
   if (!_txfifo.empty()) {
     dlf = _txfifo.front();
+    auto size = dlf->GetPacketSize();
+    _txQueueSize -= size;
     _txfifo.pop();
   }
   return dlf;
@@ -410,7 +412,7 @@ void DcMac::UpdateSlotDurFromEstimation() {
   auto size = pkt.GetPacketSize();
   auto tt = GetPktTransmissionMillis(size);
   auto maxPropDelay = _maxDistance / _propSpeed * 1000; // ms
-  auto error = 40;
+  auto error = 45;
   auto slotdur = (tt + maxPropDelay) + error;
   Log->debug(
       "RTS/CTS size: {} ; TT: {} ms ; MP: {} ms ; Err: +{} ms ; ESD: {} ms",
@@ -430,6 +432,7 @@ void DcMac::SlaveRunTx() {
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
+      _status = waitcts;
       if (_sendingDataPacket) {
         if (_ackMask & (1 << (_addr - 1))) {
           Log->debug("DATA SUCCESS");
@@ -439,8 +442,11 @@ void DcMac::SlaveRunTx() {
         }
       }
       if (!_sendingDataPacket) {
+        Log->debug("Check data in tx buffer");
         PacketPtr pkt = GetLastTxPacket();
+        PopLastTxPacket();
         if (pkt) {
+          Log->debug("Data in tx buffer");
           _sendingDataPacketSize = pkt->GetPacketSize();
           _txDataPacket->SetDestAddr(pkt->GetDestAddr());
           _txDataPacket->SetSrcAddr(_addr);
@@ -456,8 +462,6 @@ void DcMac::SlaveRunTx() {
 
       auto now = std::chrono::system_clock::now();
       Log->debug("TX: SYNC RX!");
-      // TODO: only send when there is data to send
-      _status = waitcts;
       lock.unlock();
       DcMacPacketPtr pkt(new DcMacPacket());
       pkt->SetDst(0);
@@ -477,16 +481,6 @@ void DcMac::SlaveRunTx() {
         std::unique_lock<std::mutex> statusLock(_status_mutex);
         _status_cond.wait(statusLock);
         if (_status == ctsreceived) {
-          // SEND DATA
-//          DcMacPacketPtr dataPkt = CreateObject<DcMacPacket>();
-//          dataPkt->SetType(DcMacPacket::data);
-//          dataPkt->SetDestAddr(0);
-//          dataPkt->SetSrcAddr(_addr);
-//          auto dataPktSize = static_cast<uint16_t>(std::ceil(
-//              (_givenDataTime - _devIntrinsicDelay) / 1000. * _devBitRate / 8));
-//          dataPkt->PayloadUpdated(
-//              dataPkt->GetPayloadSizeFromPacketSize(dataPktSize));
-//          dataPkt->UpdateFCS();
           if (_txDataPacket->PacketIsOk()) {
             _stream << _txDataPacket;
             Log->debug("SEND DATA {}", _sendingDataPacketSize);
@@ -711,8 +705,12 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     if (dst == _addr) {
       Log->debug("DATA received");
       auto npkt = _highPb->Create();
-      npkt->CopyFromRawBuffer(pkt->GetPayloadBuffer());
-      PushNewRxPacket(pkt);
+      uint8_t *payload = pkt->GetPayloadBuffer();
+      npkt->CopyFromRawBuffer(payload);
+      if (!npkt->PacketIsOk()) {
+        Log->critical("Data packet corrupted");
+      }
+      PushNewRxPacket(npkt);
     } else {
       Log->debug("DATA detected");
     }

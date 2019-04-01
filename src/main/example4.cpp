@@ -248,23 +248,23 @@ int main(int argc, char **argv) {
             dataRate, txPacketSize, totalPacketSize, nPackets, bytesPerSecond,
             nanosPerByte);
 
-  tx =
-      std::thread([totalPacketSize, node, seqPtr, dstPtr, dstadd, txPacket, log,
-                   nPackets, txPacketSize, nanosPerByte, msStart, msgSize]() {
-        std::this_thread::sleep_for(chrono::milliseconds(msStart));
-        for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
-          *seqPtr = npacket;
-          txPacket->SetSeq(npacket);
-          *dstPtr = dstadd;
-          txPacket->SetDestAddr(dstadd);
-          txPacket->PayloadUpdated(msgSize + 3);
-          uint64_t nanos = round(totalPacketSize * nanosPerByte);
-          log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket,
-                    txPacket->GetPacketSize());
-          node << txPacket;
-          std::this_thread::sleep_for(chrono::nanoseconds(nanos));
-        }
-      });
+  tx = std::thread([totalPacketSize, node, seqPtr, dstPtr, dstadd, txPacket,
+                    log, nPackets, txPacketSize, nanosPerByte, msStart, msgSize,
+                    payloadSize]() {
+    std::this_thread::sleep_for(chrono::milliseconds(msStart));
+    for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
+      *seqPtr = npacket;
+      txPacket->SetSeq(npacket);
+      *dstPtr = dstadd;
+      txPacket->SetDestAddr(dstadd);
+      txPacket->PayloadUpdated(payloadSize);
+      uint64_t nanos = round(totalPacketSize * nanosPerByte);
+      log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket,
+                txPacket->GetPacketSize());
+      node << txPacket;
+      std::this_thread::sleep_for(chrono::nanoseconds(nanos));
+    }
+  });
 
   if (!disableRx) {
     rx = std::thread([node, rxpb, log]() {

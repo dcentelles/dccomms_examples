@@ -147,8 +147,8 @@ private:
   void MasterRunTx();
   void MasterProcessRxPacket(const DcMacPacketPtr &pkt);
   void SlaveProcessRxPacket(const DcMacPacketPtr &pkt);
-  PacketPtr GetAndPopNextRxPacket();
-  PacketPtr GetAndPopNextTxPacket();
+  PacketPtr WaitForNextRxPacket();
+  PacketPtr WaitForNextTxPacket();
   PacketPtr GetLastTxPacket();
   PacketPtr PopLastTxPacket();
   void PushNewRxPacket(PacketPtr);
@@ -196,7 +196,7 @@ private:
   uint8_t _ackMask;
   bool _ackReceived;
   bool _sendingDataPacket;
-  bool _sendingDataPacketSize;
+  uint32_t _sendingDataPacketSize;
 };
 
 } // namespace dccomms_examples
