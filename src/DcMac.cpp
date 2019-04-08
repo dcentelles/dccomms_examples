@@ -7,7 +7,7 @@ DcMacPacket::DcMacPacket() {
   _prefixSize = ADD_SIZE + FLAGS_SIZE;
   _overheadSize = PRE_SIZE + _prefixSize + FCS_SIZE;
   _maxPacketSize =
-      _overheadSize + TIME_SIZE + PAYLOAD_SIZE_FIELD + MAX_PAYLOAD_SIZE;
+      _overheadSize + CTSRTS_FIELD_SIZE + PAYLOAD_SIZE_FIELD_SIZE + MAX_PAYLOAD_SIZE;
   _AllocBuffer(_maxPacketSize);
   _Init();
 }
@@ -30,19 +30,19 @@ void DcMacPacket::_Init() {
 
 int DcMacPacket::GetPayloadSizeFromPacketSize(int size) {
   return size - DcMacPacket::PRE_SIZE - DcMacPacket::ADD_SIZE -
-         DcMacPacket::FLAGS_SIZE - DcMacPacket::PAYLOAD_SIZE_FIELD -
+         DcMacPacket::FLAGS_SIZE - DcMacPacket::PAYLOAD_SIZE_FIELD_SIZE -
          DcMacPacket::FCS_SIZE;
 }
 
 int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
   int size;
   if (ptype == Type::cts || ptype == Type::rts) {
-    size = TIME_SIZE;
+    size = CTSRTS_FIELD_SIZE;
   } else if (ptype == data) {
     uint8_t payloadSize = *buffer;
-    size = PAYLOAD_SIZE_FIELD + payloadSize;
+    size = PAYLOAD_SIZE_FIELD_SIZE + payloadSize;
   } else if (ptype == sync) { // sync
-    size = SYNCFIELD_SIZE;
+    size = SYNC_FIELD_SIZE;
   }
   return size;
 }
@@ -90,17 +90,17 @@ void DcMacPacket::Read(Stream *stream) {
   uint8_t *end;
   if (type != unknown) {
     if (type == cts || type == rts) {
-      stream->Read(_variableArea, TIME_SIZE);
+      stream->Read(_variableArea, CTSRTS_FIELD_SIZE);
       size = 0;
-      end = _variableArea + TIME_SIZE;
+      end = _variableArea + CTSRTS_FIELD_SIZE;
     } else if (type == data) {
-      stream->Read(_variableArea, PAYLOAD_SIZE_FIELD);
+      stream->Read(_variableArea, PAYLOAD_SIZE_FIELD_SIZE);
       size = GetPayloadSize();
-      end = _variableArea + PAYLOAD_SIZE_FIELD;
+      end = _variableArea + PAYLOAD_SIZE_FIELD_SIZE;
     } else if (type == sync) { // sync (ack in)
-      stream->Read(_variableArea, SYNCFIELD_SIZE);
+      stream->Read(_variableArea, SYNC_FIELD_SIZE);
       size = 0;
-      end = _variableArea + SYNCFIELD_SIZE;
+      end = _variableArea + SYNC_FIELD_SIZE;
     }
   } else {
     size = 0;
@@ -134,15 +134,15 @@ void DcMacPacket::UpdateFCS() {
   Type type = GetType();
   if (type != unknown) {
     if (type == cts || type == rts) {
-      crc = Checksum::crc16(_add, _prefixSize + TIME_SIZE);
-      _fcs = _variableArea + TIME_SIZE;
+      crc = Checksum::crc16(_add, _prefixSize + CTSRTS_FIELD_SIZE);
+      _fcs = _variableArea + CTSRTS_FIELD_SIZE;
     } else if (type == data) {
       crc = Checksum::crc16(_add,
-                            _prefixSize + PAYLOAD_SIZE_FIELD + *_payloadSize);
-      _fcs = _variableArea + PAYLOAD_SIZE_FIELD + *_payloadSize;
+                            _prefixSize + PAYLOAD_SIZE_FIELD_SIZE + *_payloadSize);
+      _fcs = _variableArea + PAYLOAD_SIZE_FIELD_SIZE + *_payloadSize;
     } else if (type == sync) { // sync
-      crc = Checksum::crc16(_add, _prefixSize + SYNCFIELD_SIZE);
-      _fcs = _variableArea + SYNCFIELD_SIZE;
+      crc = Checksum::crc16(_add, _prefixSize + SYNC_FIELD_SIZE);
+      _fcs = _variableArea + SYNC_FIELD_SIZE;
     }
   } else {
     _fcs = _variableArea;
@@ -158,12 +158,12 @@ bool DcMacPacket::_CheckFCS() {
   Type type = GetType();
   if (type != unknown) {
     if (type == cts || type == rts) {
-      crc = Checksum::crc16(_add, _prefixSize + TIME_SIZE + FCS_SIZE);
+      crc = Checksum::crc16(_add, _prefixSize + CTSRTS_FIELD_SIZE + FCS_SIZE);
     } else if (type == data) {
-      crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD +
+      crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD_SIZE +
                                       *_payloadSize + FCS_SIZE);
     } else if (type == sync) { // sync
-      crc = Checksum::crc16(_add, _prefixSize + SYNCFIELD_SIZE + FCS_SIZE);
+      crc = Checksum::crc16(_add, _prefixSize + SYNC_FIELD_SIZE + FCS_SIZE);
     }
   } else {
     crc = 1;

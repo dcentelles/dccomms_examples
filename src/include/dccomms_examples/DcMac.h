@@ -60,9 +60,9 @@ public:
   bool PacketIsOk();
 
   void UpdateFCS();
-  static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, TIME_SIZE = 2,
-                   PAYLOAD_SIZE_FIELD = 1, MAX_PAYLOAD_SIZE = UINT8_MAX,
-                   SYNCFIELD_SIZE = 1,
+  static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, CTSRTS_FIELD_SIZE = 2,
+                   PAYLOAD_SIZE_FIELD_SIZE = 1, MAX_PAYLOAD_SIZE = UINT8_MAX,
+                   SYNC_FIELD_SIZE = 1,
                    FCS_SIZE = 2; // CRC16
 private:
   int _maxPacketSize;
