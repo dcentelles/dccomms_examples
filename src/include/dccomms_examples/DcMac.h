@@ -23,7 +23,7 @@ typedef uint16_t DcMacTimeField;
 
 class DcMacPacket : public Packet {
 public:
-  enum Type { sync = 0, rts, cts, data, ack, unknown };
+  enum Type { sync = 0, rts, cts, data, unknown };
   DcMacPacket();
   void SetDst(uint8_t add);
   void SetSrc(uint8_t add);
@@ -57,7 +57,7 @@ public:
   void UpdateFCS();
   static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, TIME_SIZE = 2,
                    PAYLOAD_SIZE_FIELD = 1, MAX_PAYLOAD_SIZE = UINT8_MAX,
-                   ACKFIELD_SIZE = 1,
+                   SYNCFIELD_SIZE = 1,
                    FCS_SIZE = 2; // CRC16
 private:
   int _maxPacketSize;

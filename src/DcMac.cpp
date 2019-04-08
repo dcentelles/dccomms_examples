@@ -40,9 +40,7 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
     uint8_t payloadSize = *buffer;
     size = PAYLOAD_SIZE_FIELD + payloadSize;
   } else if (ptype == sync) { // sync
-    size = ACKFIELD_SIZE;
-  } else if (ptype == ack) {
-    size = ACKFIELD_SIZE;
+    size = SYNCFIELD_SIZE;
   }
   return size;
 }
@@ -86,13 +84,9 @@ void DcMacPacket::Read(Stream *stream) {
       size = GetPayloadSize();
       end = _variableArea + PAYLOAD_SIZE_FIELD;
     } else if (type == sync) { // sync (ack in)
-      stream->Read(_variableArea, ACKFIELD_SIZE);
+      stream->Read(_variableArea, SYNCFIELD_SIZE);
       size = 0;
-      end = _variableArea + ACKFIELD_SIZE;
-    } else if (type == ack) { // not used
-      stream->Read(_variableArea, ACKFIELD_SIZE);
-      size = 0;
-      end = _variableArea + ACKFIELD_SIZE;
+      end = _variableArea + SYNCFIELD_SIZE;
     }
   } else {
     size = 0;
@@ -133,11 +127,8 @@ void DcMacPacket::UpdateFCS() {
                             _prefixSize + PAYLOAD_SIZE_FIELD + *_payloadSize);
       _fcs = _variableArea + PAYLOAD_SIZE_FIELD + *_payloadSize;
     } else if (type == sync) { // sync
-      crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE);
-      _fcs = _variableArea + ACKFIELD_SIZE;
-    } else if (type == ack) {
-      crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE);
-      _fcs = _variableArea + ACKFIELD_SIZE;
+      crc = Checksum::crc16(_add, _prefixSize + SYNCFIELD_SIZE);
+      _fcs = _variableArea + SYNCFIELD_SIZE;
     }
   } else {
     _fcs = _variableArea;
@@ -158,9 +149,7 @@ bool DcMacPacket::_CheckFCS() {
       crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD +
                                       *_payloadSize + FCS_SIZE);
     } else if (type == sync) { // sync
-      crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE + FCS_SIZE);
-    } else if (type == ack) {
-      crc = Checksum::crc16(_add, _prefixSize + ACKFIELD_SIZE + FCS_SIZE);
+      crc = Checksum::crc16(_add, _prefixSize + SYNCFIELD_SIZE + FCS_SIZE);
     }
   } else {
     crc = 1;
@@ -187,7 +176,7 @@ void DcMacPacket::SetType(Type type) { _SetType(_flags, type); }
 DcMacPacket::Type DcMacPacket::_GetType(uint8_t *flags) {
   uint8_t ntype = (*flags & 0x7);
   Type value;
-  if (ntype < 5)
+  if (ntype < 4)
     value = static_cast<Type>(ntype);
   else
     value = unknown;
@@ -752,12 +741,6 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
       Log->debug("DATA received");
       PushNewRxPacket(pkt);
     }
-    break;
-  }
-  case DcMacPacket::ack: {
-    Log->debug("ACK received");
-    _ackMask = pkt->GetAckMask();
-    _status = DcMac::ackreceived;
     break;
   }
   }
