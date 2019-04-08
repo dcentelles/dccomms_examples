@@ -18,8 +18,10 @@ void DcMacPacket::_Init() {
   _add = _pre + 1;
   _flags = _add + 1;
   _variableArea = _flags + 1;
-  _ackMask = _variableArea;
-  _time = (DcMacTimeField *)(_variableArea);
+  _masterAckMask = _variableArea;
+  _slaveAckMask = _variableArea;
+  _rtsSizeByte0 = _variableArea;
+  _rtsSizeByte1 = _rtsSizeByte0 + 1;
   _payloadSize = _variableArea;
   *_payloadSize = 0;
   _payload = _payloadSize + 1;
@@ -45,13 +47,25 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
   return size;
 }
 
-void DcMacPacket::SetAckMask(const uint8_t &mask) { *_ackMask = mask; }
+bool DcMacPacket::GetSlaveAck(uint8_t slave) {
+  return *_slaveAckMask & (1 << (slave - 1));
+}
+void DcMacPacket::SetSlaveAck(uint8_t slave) {
+  *_slaveAckMask = *_slaveAckMask | (1 << (slave - 1));
+}
 
-uint8_t DcMacPacket::GetAckMask() { return *_ackMask; }
+void DcMacPacket::ReinitSlaveAckMask() {
+  *_slaveAckMask = *_slaveAckMask & 0xf8;
+}
+
+void DcMacPacket::SetMasterAckMask(const uint8_t &mask) {
+  *_masterAckMask = mask;
+}
+
+uint8_t DcMacPacket::GetMasterAckMask() { return *_masterAckMask; }
 
 void DcMacPacket::DoCopyFromRawBuffer(void *buffer) {
   uint8_t *type = (uint8_t *)buffer + PRE_SIZE + ADD_SIZE;
-  uint8_t *bufferPtr = (uint8_t *)buffer;
   Type ptype = _GetType(type);
   int size = PRE_SIZE + _prefixSize + _GetTypeSize(ptype, type + FLAGS_SIZE) +
              FCS_SIZE;
@@ -192,16 +206,25 @@ void DcMacPacket::SetSrc(uint8_t add) {
 
 uint8_t DcMacPacket::GetSrc() { return (*_add & 0xf0) >> 4; }
 
-DcMacTimeField DcMacPacket::GetTime() {
+DcMacRtsDataSizeField DcMacPacket::GetRtsDataSize() {
   Type type = GetType();
   if (type != data && type != unknown) {
-    return *_time;
+    return _GetRtsDataSize();
   } else {
     return 0;
   }
 }
 
-void DcMacPacket::SetTime(const DcMacTimeField &tt) { *_time = tt; }
+uint16_t DcMacPacket::_GetRtsDataSize() {
+  uint16_t v = (*_rtsSizeByte0 & 0x7) << 8 | *_rtsSizeByte1;
+  return v * 2;
+}
+
+void DcMacPacket::SetRtsDataSize(const DcMacRtsDataSizeField &ds) {
+  uint16_t half = std::ceil(ds / 2.);
+  *_rtsSizeByte0 = *_rtsSizeByte0 | ((half & 0x700) >> 8);
+  *_rtsSizeByte1 = *_rtsSizeByte1 | half & 0xff;
+}
 
 CLASS_LOADER_REGISTER_CLASS(DcMacPacketBuilder, IPacketBuilder)
 
@@ -456,8 +479,7 @@ void DcMac::SlaveRunTx() {
       pkt->SetDst(0);
       pkt->SetSrc(_addr);
       pkt->SetType(DcMacPacket::rts);
-      pkt->SetTime(_sendingDataPacketSize * 8. / _devBitRate * 1000 +
-                   _devIntrinsicDelay);
+      pkt->SetRtsDataSize(_sendingDataPacketSize);
       pkt->UpdateFCS();
       auto rtsWakeUp = now + rtsSlotDelay;
       auto ctsWakeUp = now + ctsSlotDelay;
@@ -529,7 +551,7 @@ void DcMac::MasterRunTx() {
       syncPkt->SetDst(0xf);
       syncPkt->SetSrc(_addr);
       syncPkt->SetType(DcMacPacket::sync);
-      syncPkt->SetAckMask(_ackMask);
+      syncPkt->SetMasterAckMask(_ackMask);
       syncPkt->UpdateFCS();
       if (syncPkt->PacketIsOk()) {
         _stream << syncPkt;
@@ -559,8 +581,8 @@ void DcMac::MasterRunTx() {
               Log->debug("RTS received from slave {}", _currentRtsSlot);
               SlaveRTS *rts = &_slaveRtsReqs[_rtsSlave - 1];
               rts->req = true;
-              rts->reqmillis = _givenDataTime;
-
+              rts->reqmillis = _rtsDataTime;
+              rts->reqdatasize = _rtsDataSize;
             } else {
               Log->warn("RTS received from wrong slave");
             }
@@ -599,9 +621,9 @@ void DcMac::MasterRunTx() {
           ctsPkt->SetDst(slaveAddr);
           ctsPkt->SetSrc(_addr);
           ctsPkt->SetType(DcMacPacket::cts);
-          ctsPkt->SetTime(winnerSlave->reqmillis);
+          ctsPkt->SetRtsDataSize(winnerSlave->reqdatasize);
           ctsPkt->UpdateFCS();
-          winnerSlave->ctsBytes += winnerSlave->reqmillis;
+          winnerSlave->ctsBytes += winnerSlave->reqdatasize;
           if (ctsPkt->PacketIsOk()) {
             Log->debug("Send CTS to {}", slaveAddr);
             _stream << ctsPkt;
@@ -683,10 +705,11 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
   }
   case DcMacPacket::rts: {
     _status = rtsreceived;
-    _givenDataTime = pkt->GetTime();
+    _rtsDataSize = pkt->GetRtsDataSize();
+    _rtsDataTime = GetPktTransmissionMillis(_rtsDataSize);
     _rtsSlave = pkt->GetSrcAddr();
-    Log->debug("RTS received {} - {}", RelativeTime::GetMillis(),
-               _givenDataTime);
+    Log->debug("{} RTS received. {} ms ; {} B", RelativeTime::GetMillis(),
+               _rtsDataTime, _rtsDataSize);
     break;
   }
   case DcMacPacket::data: {
@@ -716,13 +739,13 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
   switch (type) {
   case DcMacPacket::sync: {
     RelativeTime::Reset();
-    _ackMask = pkt->GetAckMask();
+    _ackMask = pkt->GetMasterAckMask();
     _status = DcMac::syncreceived;
     Log->debug("SYNC received");
     break;
   }
   case DcMacPacket::cts: {
-    _givenDataTime = pkt->GetTime();
+    _rtsDataTime = pkt->GetRtsDataSize();
     Log->debug("CTS detected");
     if (dst == _addr) {
       Log->debug("CTS received");

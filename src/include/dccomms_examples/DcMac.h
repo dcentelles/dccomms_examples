@@ -19,7 +19,8 @@ namespace dccomms_examples {
 
 typedef uint8_t DcMacInfoField;
 typedef uint8_t DcMacPSizeField;
-typedef uint16_t DcMacTimeField;
+typedef uint16_t DcMacRtsDataSizeField;
+typedef uint8_t DcMacAckField;
 
 class DcMacPacket : public Packet {
 public:
@@ -29,13 +30,17 @@ public:
   void SetSrc(uint8_t add);
   void SetType(Type type);
   Type GetType();
-  void SetTime(const DcMacTimeField &tt);
-  DcMacTimeField GetTime();
+  void SetRtsDataSize(const DcMacRtsDataSizeField &tt);
+  DcMacRtsDataSizeField GetRtsDataSize();
+  bool GetSlaveAck(uint8_t slave);
 
   uint8_t GetDst();
   uint8_t GetSrc();
-  void SetAckMask(const uint8_t &mask);
-  uint8_t GetAckMask();
+  void SetMasterAckMask(const uint8_t &mask);
+  void SetSlaveAck(uint8_t slave);
+  void ReinitSlaveAckMask();
+
+  uint8_t GetMasterAckMask();
 
   static int GetPayloadSizeFromPacketSize(int size);
 
@@ -65,15 +70,17 @@ private:
   uint8_t *_pre;
   DcMacInfoField *_add;
   DcMacInfoField *_flags;
-  DcMacTimeField *_time;
+  uint8_t *_rtsSizeByte0, *_rtsSizeByte1;
+  DcMacAckField *_slaveAckMask;
   DcMacPSizeField *_payloadSize;
-  DcMacInfoField *_ackMask;
+  DcMacInfoField *_masterAckMask;
   uint8_t *_variableArea;
   uint8_t *_payload;
   uint8_t *_fcs;
   int _prefixSize;
   Type _GetType(uint8_t *flags);
   void _SetType(uint8_t *flags, Type type);
+  uint16_t _GetRtsDataSize();
   void _Init();
   bool _CheckFCS();
   int _GetTypeSize(Type type, uint8_t *buffer);
@@ -159,7 +166,7 @@ private:
 
   struct SlaveRTS {
     bool req;
-    uint16_t reqmillis;
+    uint16_t reqmillis, reqdatasize;
     uint32_t ctsBytes;
   };
 
@@ -171,7 +178,7 @@ private:
   PacketBuilderPtr _highPb;
   PacketPtr _flushPkt;
   uint16_t _addr, _maxSlaves;
-  DcMacTimeField _time; // millis
+  DcMacRtsDataSizeField _time; // millis
   DcMacPacketPtr _txDataPacket;
 
   std::mutex _rxfifo_mutex, _txfifo_mutex;
@@ -186,7 +193,8 @@ private:
   uint32_t _rtsCtsSlotDur;  // millis
   uint32_t _maxDataSlotDur; // millis
   uint32_t _currentRtsSlot;
-  uint32_t _givenDataTime;
+  uint32_t _rtsDataTime;
+  uint16_t _rtsDataSize;
   uint32_t _devBitRate;      // bps
   double _devIntrinsicDelay; // millis
   double _propSpeed;         // m/s
