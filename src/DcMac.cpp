@@ -6,11 +6,13 @@ namespace dccomms_examples {
 DcMacPacket::DcMacPacket() {
   _prefixSize = ADD_SIZE + FLAGS_SIZE;
   _overheadSize = PRE_SIZE + _prefixSize + FCS_SIZE;
-  _maxPacketSize =
-      _overheadSize + CTSRTS_FIELD_SIZE + PAYLOAD_SIZE_FIELD_SIZE + MAX_PAYLOAD_SIZE;
+  _maxPacketSize = _overheadSize + CTSRTS_FIELD_SIZE + PAYLOAD_SIZE_FIELD_SIZE +
+                   MAX_PAYLOAD_SIZE;
   _AllocBuffer(_maxPacketSize);
   _Init();
 }
+
+PacketPtr DcMacPacket::Create() { return CreateObject<DcMacPacket>(); }
 
 void DcMacPacket::_Init() {
   _pre = GetBuffer();
@@ -137,8 +139,8 @@ void DcMacPacket::UpdateFCS() {
       crc = Checksum::crc16(_add, _prefixSize + CTSRTS_FIELD_SIZE);
       _fcs = _variableArea + CTSRTS_FIELD_SIZE;
     } else if (type == data) {
-      crc = Checksum::crc16(_add,
-                            _prefixSize + PAYLOAD_SIZE_FIELD_SIZE + *_payloadSize);
+      crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD_SIZE +
+                                      *_payloadSize);
       _fcs = _variableArea + PAYLOAD_SIZE_FIELD_SIZE + *_payloadSize;
     } else if (type == sync) { // sync
       crc = Checksum::crc16(_add, _prefixSize + SYNC_FIELD_SIZE);
@@ -374,6 +376,7 @@ PacketPtr DcMac::PopLastTxPacket() {
   if (!_txfifo.empty()) {
     dlf = _txfifo.front();
     auto size = dlf->GetPacketSize();
+    Log->debug("Tx packet POP. Seq: {}", dlf->GetSeq());
     _txQueueSize -= size;
     _txfifo.pop();
   }
@@ -393,17 +396,20 @@ void DcMac::PushNewRxPacket(PacketPtr dlf) {
   _rxfifo_mutex.unlock();
 }
 
-void DcMac::PushNewTxPacket(PacketPtr dlf) {
+void DcMac::PushNewTxPacket(PacketPtr pkt) {
+  PacketPtr dlf = pkt->CreateCopy();
   _txfifo_mutex.lock();
   auto size = dlf->GetPacketSize();
   if (size + _txQueueSize <= _maxQueueSize) {
     _txQueueSize += size;
     _txfifo.push(dlf);
+    Log->debug("Tx packet added. Seq: {}", dlf->GetSeq());
   } else {
     Log->warn("Tx queue full. Packet dropped");
   }
   _txfifo_cond.notify_one();
   _txfifo_mutex.unlock();
+  Log->debug("Tx fifo size: {} ({} packets)", _txQueueSize, _txfifo.size());
 }
 
 double DcMac::GetPktTransmissionMillis(const uint32_t &size) {
@@ -455,14 +461,16 @@ void DcMac::SlaveRunTx() {
       }
       if (!_sendingDataPacket) {
         Log->debug("Check data in tx buffer");
-        PacketPtr pkt = GetLastTxPacket();
+        _txUpperPkt = GetLastTxPacket();
         PopLastTxPacket();
-        if (pkt) {
-          Log->debug("Data in tx buffer");
-          _sendingDataPacketSize = pkt->GetPacketSize();
-          _txDataPacket->SetDestAddr(pkt->GetDestAddr());
+        if (_txUpperPkt) {
+          Log->debug("Data in tx buffer. Seq: {}", _txUpperPkt->GetSeq());
+          _sendingDataPacketSize = _txUpperPkt->GetPacketSize();
+          _txDataPacket->SetDestAddr(_txUpperPkt->GetDestAddr());
           _txDataPacket->SetSrcAddr(_addr);
-          _txDataPacket->SetPayload(pkt->GetBuffer(), _sendingDataPacketSize);
+          _txDataPacket->SetPayload(_txUpperPkt->GetBuffer(),
+                                    _sendingDataPacketSize);
+          _txDataPacket->SetSeq(_txUpperPkt->GetSeq());
           _txDataPacket->UpdateFCS();
           _sendingDataPacket = true;
           Log->debug("Start iteration for sending packet");
@@ -494,7 +502,8 @@ void DcMac::SlaveRunTx() {
         if (_status == ctsreceived) {
           if (_txDataPacket->PacketIsOk()) {
             _stream << _txDataPacket;
-            Log->debug("SEND DATA {}", _sendingDataPacketSize);
+            Log->debug("SEND DATA. Seq {} ; Size {}", _txDataPacket->GetSeq(),
+                       _sendingDataPacketSize);
           } else {
             Log->critical("data packet corrupt before transmitting");
           }

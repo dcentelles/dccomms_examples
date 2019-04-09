@@ -259,8 +259,7 @@ int main(int argc, char **argv) {
       txPacket->SetDestAddr(dstadd);
       txPacket->PayloadUpdated(payloadSize);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
-      log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket,
-                txPacket->GetPacketSize());
+      log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket, txPacket->GetPacketSize());
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }

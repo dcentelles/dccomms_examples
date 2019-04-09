@@ -58,6 +58,7 @@ public:
   uint32_t SetPayload(uint8_t *data, uint32_t size);
 
   bool PacketIsOk();
+  PacketPtr Create();
 
   void UpdateFCS();
   static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, CTSRTS_FIELD_SIZE = 2,
@@ -180,6 +181,7 @@ private:
   uint16_t _addr, _maxSlaves;
   DcMacRtsDataSizeField _time; // millis
   DcMacPacketPtr _txDataPacket;
+  PacketPtr _txUpperPkt;
 
   std::mutex _rxfifo_mutex, _txfifo_mutex;
   std::condition_variable _rxfifo_cond, _txfifo_cond;
