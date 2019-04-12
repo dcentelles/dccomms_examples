@@ -231,7 +231,7 @@ int main(int argc, char **argv) {
     log->Info("Async. log");
   }
 
-  node->SetLogLevel(debug);
+  node->SetLogLevel(logLevel);
   if (dcmac) {
     macLayer->Start();
   } else {
