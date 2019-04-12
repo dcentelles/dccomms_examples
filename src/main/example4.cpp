@@ -253,9 +253,7 @@ int main(int argc, char **argv) {
                     payloadSize]() {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
-      *seqPtr = npacket;
       txPacket->SetSeq(npacket);
-      *dstPtr = dstadd;
       txPacket->SetDestAddr(dstadd);
       txPacket->PayloadUpdated(payloadSize);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
