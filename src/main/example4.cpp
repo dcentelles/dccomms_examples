@@ -259,7 +259,8 @@ int main(int argc, char **argv) {
       txPacket->SetDestAddr(dstadd);
       txPacket->PayloadUpdated(payloadSize);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
-      log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket, txPacket->GetPacketSize());
+      log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket,
+                txPacket->GetPacketSize());
       node << txPacket;
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
@@ -271,8 +272,8 @@ int main(int argc, char **argv) {
       while (true) {
         node >> dlf;
         if (dlf->PacketIsOk()) {
-          uint16_t *seqPtr = (uint16_t *)(dlf->GetPayloadBuffer() + 1);
-          log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrcAddr(), *seqPtr,
+          uint32_t seq = dlf->GetSeq();
+          log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrcAddr(), seq,
                     dlf->GetPacketSize());
         } else
           log->Warn("ERR");
