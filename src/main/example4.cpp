@@ -20,11 +20,18 @@ using namespace std;
 using namespace cpputils;
 using namespace dccomms_packets;
 using namespace dccomms_examples;
-
+/*
+macLayer->SetDevBitRate(1800);
+macLayer->SetDevIntrinsicDelay(85.282906);
+macLayer->SetMaxDistance(15);
+macLayer->SetPropSpeed(3e8);
+*/
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 200, txPacketSize = 20, rxPacketSize = 20, nPackets = 0,
-           add = 1, dstadd = 2, packetSizeOffset = 0, dcmacMaxNodes = 4;
+           add = 1, dstadd = 2, packetSizeOffset = 0, dcmacMaxNodes = 4,
+           devBitRate = 1800;
+  double devIntrinsicDelay = 0, maxDistance = 15, propSpeed = 3e8;
   uint64_t msStart = 0;
   enum PktType { DLF = 0, VL = 1, SP = 2 };
   uint32_t txPktTypeInt = 1, rxPktTypeInt = 1;
@@ -42,6 +49,22 @@ int main(int argc, char **argv) {
         cxxopts::value<std::string>(logLevelStr)->default_value(logLevelStr))(
         "help", "Print help");
     options.add_options("node_comms")(
+        "devDelay",
+        std::string("(DcMac) device intrinsic delay (default: ") +
+            std::to_string(devIntrinsicDelay) + ")",
+        cxxopts::value<double>(devIntrinsicDelay))(
+        "maxRange",
+        std::string("(DcMac) set max device max. range (default: ") +
+            std::to_string(maxDistance) + ")",
+        cxxopts::value<double>(maxDistance))(
+        "propSpeed",
+        std::string("(DcMac) set prop. speed (default: ") +
+            std::to_string(propSpeed) + ")",
+        cxxopts::value<double>(propSpeed))(
+        "devBitRate",
+        std::string("(DcMac) bit rate of the device (default: ") +
+            std::to_string(devBitRate) + ")",
+        cxxopts::value<uint32_t>(devBitRate))(
         "tx-packet-type",
         "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket.",
         cxxopts::value<uint32_t>(txPktTypeInt))(
@@ -54,32 +77,48 @@ int main(int argc, char **argv) {
         "the src and dst addr is set in the first payload byte. Not used in "
         "SimplePacket)",
         cxxopts::value<uint32_t>(dstadd))(
-        "num-packets", "number of packets to transmit (default: 0)",
+        "num-packets",
+        std::string("number of packets to transmit (default: ") +
+            std::to_string(nPackets) + ")",
         cxxopts::value<uint32_t>(nPackets))(
         "ms-start",
-        "It will begin to transmit num-packets packets after ms-start millis "
-        "(default: 0 ms)",
+        std::string("It will begin to transmit num-packets packets after "
+                    "ms-start millis (default: ") +
+            std::to_string(msStart) + ")",
         cxxopts::value<uint64_t>(msStart))(
         "tx-packet-size",
-        "transmitted packet size in bytes (overhead + payload) (default: 20 "
-        "Bytes)",
+        std::string("transmitted packet size in bytes (overhead + payload) "
+                    "(default: ") +
+            std::to_string(txPacketSize) + ")",
         cxxopts::value<uint32_t>(txPacketSize))(
         "rx-packet-size",
-        "received packet size in bytes (overhead + payload). Only needed if "
-        "packet type is 1 (default: 20 Bytes)",
+        std::string("received packet size in bytes (overhead + payload). Only "
+                    "needed if "
+                    "packet type is 1 (default: ") +
+            std::to_string(rxPacketSize) + ")",
         cxxopts::value<uint32_t>(rxPacketSize))(
         "data-rate",
-        "application data rate in bps. A high value could saturate the output "
-        "buffer (default: 200 bps)",
+        std::string("application data rate in bps. A high value could saturate "
+                    "the output "
+                    "buffer (default: ") +
+            std::to_string(dataRate) + ")",
         cxxopts::value<uint32_t>(dataRate))(
-        "packet-size-offset", "packet size offset in bytes (default: 0)",
+        "packet-size-offset",
+        std::string("packet size offset in bytes (default: ") +
+            std::to_string(packetSizeOffset) + ")",
         cxxopts::value<uint32_t>(packetSizeOffset))(
-        "disable-rx", "disable packets reception (default: false)",
-        cxxopts::value<bool>(disableRx))("dcmac", "adds a DcMAC layer",
+        "disable-rx",
+        std::string("disable packets reception (default: ") +
+            (disableRx ? "true" : "false") + ")",
+        cxxopts::value<bool>(disableRx))("dcmac", "(DcMac) adds a DcMAC layer",
                                          cxxopts::value<bool>(dcmac))(
-        "master", "set DcMac mode to master (default: slave)",
+        "master",
+        std::string("(DcMac) set DcMac mode to master (default: ") +
+            (dcmacmaster ? "master" : "slave") + ")",
         cxxopts::value<bool>(dcmacmaster))(
-        "maxnodes", "set DcMac max. num of nodes (default: 4))",
+        "maxnodes",
+        std::string("(DcMac) set DcMac max. num of nodes (default: ") +
+            std::to_string(dcmacMaxNodes) + ")",
         cxxopts::value<uint32_t>(dcmacMaxNodes))(
         "node-name", "dccomms id",
         cxxopts::value<std::string>(nodeName)->default_value("node0"));
@@ -186,10 +225,10 @@ int main(int argc, char **argv) {
     macLayer->SetCommsDeviceId(nodeName);
     macLayer->SetPktBuilder(rxpb);
     macLayer->SetAddr(add);
-    macLayer->SetDevBitRate(1800);
-    macLayer->SetDevIntrinsicDelay(85.282906);
-    macLayer->SetMaxDistance(15);
-    macLayer->SetPropSpeed(3e8);
+    macLayer->SetDevBitRate(devBitRate);
+    macLayer->SetDevIntrinsicDelay(devIntrinsicDelay);
+    macLayer->SetMaxDistance(maxDistance);
+    macLayer->SetPropSpeed(propSpeed);
     macLayer->SetNumberOfNodes(dcmacMaxNodes);
 
     macLayer->SetMaxDataSlotDur(maxDataSlotDur);
