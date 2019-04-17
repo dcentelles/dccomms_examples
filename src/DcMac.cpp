@@ -769,9 +769,18 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::data: {
+    _status = datareceived;
     if (dst == _addr) {
       Log->debug("DATA received");
-      PushNewRxPacket(pkt);
+      auto npkt = _highPb->Create();
+      uint8_t *payload = pkt->GetPayloadBuffer();
+      npkt->CopyFromRawBuffer(payload);
+      if (!npkt->PacketIsOk()) {
+        Log->critical("Data packet corrupted");
+      }
+      PushNewRxPacket(npkt);
+    } else {
+      Log->debug("DATA detected");
     }
     break;
   }
