@@ -493,18 +493,20 @@ void DcMac::SlaveRunTx() {
 
       DcMacPacketPtr pkt(new DcMacPacket());
       bool sendRtsOrAck = false, sendRts = false;
+
+      if (_replyAckPending) {
+        pkt->SetRtsDataSize(0);
+        pkt->SetSlaveAckMask(_lastDataReceivedFrom);
+        _lastDataReceivedFrom = 0;
+        sendRtsOrAck = true;
+      }
+
       if (_sendingDataPacket && !_waitingForAck) {
         auto dst = _txDataPacket->GetDestAddr();
         pkt->SetDst(dst);
         pkt->SetRtsDataSize(_sendingDataPacketSize);
         sendRtsOrAck = true;
         sendRts = true;
-      }
-      if (_replyAckPending) {
-        pkt->SetRtsDataSize(0);
-        pkt->SetSlaveAckMask(_lastDataReceivedFrom);
-        _lastDataReceivedFrom = 0;
-        sendRtsOrAck = true;
       }
 
       pkt->SetSrc(_addr);
@@ -804,6 +806,10 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::rts: {
+    //    if(_addr == pkt->GetSlaveAck(0))
+    //    {
+    //        //L
+    //    }
     _rtsDataSize = pkt->GetRtsDataSize();
     if (_rtsDataSize > 0) {
       _status = rtsreceived;
@@ -817,8 +823,6 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
       Log->debug("{} RTS received. {} ms ; {} B ; From: {}",
                  RelativeTime::GetMillis(), _rtsDataTime, _rtsDataSize,
                  pkt->GetSrc());
-    } else {
-      Log->debug("ACK detected from {}", pkt->GetSrc());
     }
     break;
   }
