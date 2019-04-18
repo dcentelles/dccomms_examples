@@ -50,17 +50,18 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
 }
 
 bool DcMacPacket::GetSlaveAck(uint8_t slave) {
-  return *_slaveAckMask & (1 << (slave - 1));
+  return *_slaveAckMask & (0x08 << (slave - 1));
 }
 void DcMacPacket::SetSlaveAck(uint8_t slave) {
-  *_slaveAckMask = *_slaveAckMask | (1 << (slave - 1));
+  *_slaveAckMask = *_slaveAckMask | (0x08 << (slave - 1));
 }
 
-void DcMacPacket::ReinitSlaveAckMask() {
-  *_slaveAckMask = *_slaveAckMask & 0xf8;
+void DcMacPacket::SetSlaveAckMask(const DcMacAckField &mask) {
+  *_slaveAckMask = *_slaveAckMask & 0x07;
+  *_slaveAckMask = *_slaveAckMask | (mask << 3);
 }
 
-void DcMacPacket::SetMasterAckMask(const uint8_t &mask) {
+void DcMacPacket::SetMasterAckMask(const DcMacAckField &mask) {
   *_masterAckMask = mask;
 }
 
@@ -224,8 +225,9 @@ uint16_t DcMacPacket::_GetRtsDataSize() {
 
 void DcMacPacket::SetRtsDataSize(const DcMacRtsDataSizeField &ds) {
   uint16_t half = std::ceil(ds / 2.);
+  *_rtsSizeByte0 = *_rtsSizeByte0 & 0xf8;
   *_rtsSizeByte0 = *_rtsSizeByte0 | ((half & 0x700) >> 8);
-  *_rtsSizeByte1 = *_rtsSizeByte1 | half & 0xff;
+  *_rtsSizeByte1 = half & 0xff;
 }
 
 CLASS_LOADER_REGISTER_CLASS(DcMacPacketBuilder, IPacketBuilder)
@@ -445,18 +447,26 @@ void DcMac::SlaveRunTx() {
   _tx = std::thread([this]() {
     auto rtsSlotDelay = milliseconds((_addr - 1) * _rtsCtsSlotDur);
     auto ctsSlotDelay = milliseconds(_maxSlaves * _rtsCtsSlotDur);
+    bool dataSentToSlave;
+    DiscardPacketsInRxFIFO();
     while (1) {
       std::unique_lock<std::mutex> lock(_status_mutex);
+      _lastDataReceivedFrom = 0;
+      _replyAckPending = false;
       while (_status != syncreceived) {
         _status_cond.wait(lock);
       }
-      _status = waitcts;
-      if (_sendingDataPacket) {
+      auto now = std::chrono::system_clock::now();
+      Log->debug("TX: SYNC RX!");
+      _status = waitack;
+      lock.unlock();
+      if (_sendingDataPacket && _txDataPacket->GetDestAddr() == 0) {
+        _waitingForAck = false;
         if (_ackMask & (1 << (_addr - 1))) {
-          Log->debug("DATA SUCCESS");
+          Log->debug("MASTER DATA SUCCESS");
           _sendingDataPacket = false;
         } else {
-          Log->warn("DATA LOST");
+          Log->warn("MASTER DATA LOST");
         }
       }
       if (!_sendingDataPacket) {
@@ -473,30 +483,94 @@ void DcMac::SlaveRunTx() {
           _txDataPacket->SetSeq(_txUpperPkt->GetSeq());
           _txDataPacket->UpdateFCS();
           _sendingDataPacket = true;
-          Log->debug("Start iteration for sending packet");
+          _waitingForAck = false;
+          Log->debug("Data packet for transmitting");
         }
       }
-      if (!_sendingDataPacket) {
+
+      if (!_sendingDataPacket && !_replyAckPending)
         continue;
+
+      Log->debug("Start iteration for sending packet");
+
+      DcMacPacketPtr pkt(new DcMacPacket());
+      bool sendRtsOrAck = false;
+      if (_sendingDataPacket && !_waitingForAck) {
+        auto dst = _txDataPacket->GetDestAddr();
+        pkt->SetDst(dst);
+        pkt->SetRtsDataSize(_sendingDataPacketSize);
+        sendRtsOrAck = true;
+      }
+      if (_replyAckPending) {
+        pkt->SetRtsDataSize(0);
+        pkt->SetSlaveAckMask(_lastDataReceivedFrom);
+        sendRtsOrAck = true;
       }
 
-      auto now = std::chrono::system_clock::now();
-      Log->debug("TX: SYNC RX!");
-      lock.unlock();
-      DcMacPacketPtr pkt(new DcMacPacket());
-      pkt->SetDst(0);
       pkt->SetSrc(_addr);
       pkt->SetType(DcMacPacket::rts);
-      pkt->SetRtsDataSize(_sendingDataPacketSize);
+
       pkt->UpdateFCS();
+
       auto rtsWakeUp = now + rtsSlotDelay;
       auto ctsWakeUp = now + ctsSlotDelay;
 
-      this_thread::sleep_until(rtsWakeUp);
-      _stream << pkt;
-      Log->debug("Send RTS {}", RelativeTime::GetMillis());
-      this_thread::sleep_until(ctsWakeUp);
-      while (_status == waitcts) {
+      cv_status waitres = cv_status::no_timeout;
+      if (_sendingDataPacket && dataSentToSlave &&
+          _txDataPacket->GetDestAddr() < _addr) {
+        _waitingForAck = false;
+        Log->debug("Waiting for RTS with ACK ");
+        std::unique_lock<std::mutex> waitackLock(_status_mutex);
+        while (_status != ackreceived && waitres == cv_status::no_timeout) {
+          waitres = _status_cond.wait_until(waitackLock, rtsWakeUp);
+        }
+        if (_status == ackreceived) {
+          Log->debug("SLAVE DATA SUCCESS");
+          _sendingDataPacket = false;
+          dataSentToSlave = false;
+        } else {
+          Log->warn("SLAVE DATA LOST");
+        }
+      }
+
+      if (waitres == cv_status::no_timeout)
+        this_thread::sleep_until(rtsWakeUp);
+
+      if (sendRtsOrAck) {
+        _stream << pkt;
+        if (_sendingDataPacket && !_waitingForAck) {
+          Log->debug("Send RTS");
+        }
+        if (_replyAckPending) {
+          Log->debug("Send ACK");
+        }
+      }
+
+      waitres = cv_status::no_timeout;
+      if (_sendingDataPacket && dataSentToSlave &&
+          _txDataPacket->GetDestAddr() > _addr) {
+        _waitingForAck = false;
+        Log->debug("Waiting for RTS with ACK ");
+        std::unique_lock<std::mutex> waitackLock(_status_mutex);
+        while (_status != ackreceived && waitres == cv_status::no_timeout) {
+          waitres = _status_cond.wait_until(waitackLock, ctsWakeUp);
+        }
+        if (_status == ackreceived) {
+          Log->debug("SLAVE DATA SUCCESS");
+          _sendingDataPacket = false;
+          dataSentToSlave = false;
+        } else {
+          Log->warn("SLAVE DATA LOST");
+        }
+      }
+
+      if (!_sendingDataPacket)
+        continue;
+
+      if (waitres == cv_status::no_timeout)
+        this_thread::sleep_until(ctsWakeUp);
+
+      while (_status != syncreceived && _status != ctsreceived) {
         std::unique_lock<std::mutex> statusLock(_status_mutex);
         _status_cond.wait(statusLock);
         if (_status == ctsreceived) {
@@ -504,6 +578,11 @@ void DcMac::SlaveRunTx() {
             _stream << _txDataPacket;
             Log->debug("SEND DATA. Seq {} ; Size {}", _txDataPacket->GetSeq(),
                        _sendingDataPacketSize);
+            if (_txDataPacket->GetDestAddr() != 0)
+              dataSentToSlave = true;
+            else
+              dataSentToSlave = false;
+            _waitingForAck = true;
           } else {
             Log->critical("data packet corrupt before transmitting");
           }
@@ -513,7 +592,7 @@ void DcMac::SlaveRunTx() {
   });
 
   _tx.detach();
-}
+} // namespace dccomms_examples
 
 void DcMac::SlaveRunRx() {
   /*
@@ -588,10 +667,6 @@ void DcMac::MasterRunTx() {
           if (res == std::cv_status::no_timeout && _status == rtsreceived) {
             if (_rtsSlave == _currentRtsSlot) {
               Log->debug("RTS received from slave {}", _currentRtsSlot);
-              SlaveRTS *rts = &_slaveRtsReqs[_rtsSlave - 1];
-              rts->req = true;
-              rts->reqmillis = _rtsDataTime;
-              rts->reqdatasize = _rtsDataSize;
             } else {
               Log->warn("RTS received from wrong slave");
             }
@@ -646,14 +721,15 @@ void DcMac::MasterRunTx() {
               auto res = _status_cond.wait_until(statusLock, wakeuptime);
               if (res == std::cv_status::no_timeout &&
                   _status == datareceived) {
-                Log->debug("Data received from slave {}", slaveAddr);
-                _ackMask |= (1 << (slaveAddr - 1));
+                Log->debug("Data detected from slave {}", slaveAddr);
+                if (winnerSlave->dst == 0)
+                  _ackMask |= (1 << (slaveAddr - 1));
               } else if (res == std::cv_status::timeout) {
                 _time = RelativeTime::GetMillis();
                 if (_status != datareceived)
-                  Log->warn(
-                      "Timeout waiting for data packet from slave {}. Time: {}",
-                      slaveAddr, _time);
+                  Log->warn("Timeout waiting for data packet from slave {}. "
+                            "Time: {}",
+                            slaveAddr, _time);
                 slotEnd = true;
               }
             }
@@ -713,17 +789,24 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::rts: {
-    _status = rtsreceived;
     _rtsDataSize = pkt->GetRtsDataSize();
-    _rtsDataTime = GetPktTransmissionMillis(_rtsDataSize);
-    _rtsSlave = pkt->GetSrcAddr();
-    Log->debug("{} RTS received. {} ms ; {} B", RelativeTime::GetMillis(),
-               _rtsDataTime, _rtsDataSize);
+    if (_rtsDataSize > 0) {
+      _status = rtsreceived;
+      _rtsDataTime = GetPktTransmissionMillis(_rtsDataSize);
+      _rtsSlave = pkt->GetSrcAddr();
+      SlaveRTS *rts = &_slaveRtsReqs[_rtsSlave - 1];
+      rts->req = true;
+      rts->reqmillis = _rtsDataTime;
+      rts->reqdatasize = _rtsDataSize;
+      rts->dst = dst;
+      Log->debug("{} RTS received. {} ms ; {} B", RelativeTime::GetMillis(),
+                 _rtsDataTime, _rtsDataSize);
+    }
     break;
   }
   case DcMacPacket::data: {
-    _status = datareceived;
     if (dst == _addr) {
+      _status = datareceived;
       Log->debug("DATA received");
       auto npkt = _highPb->Create();
       uint8_t *payload = pkt->GetPayloadBuffer();
@@ -755,7 +838,6 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
   }
   case DcMacPacket::cts: {
     _rtsDataTime = pkt->GetRtsDataSize();
-    Log->debug("CTS detected");
     if (dst == _addr) {
       Log->debug("CTS received");
       _status = DcMac::ctsreceived;
@@ -766,6 +848,9 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::rts: {
+    if (pkt->GetSlaveAck(_addr)) {
+      _status = ackreceived;
+    }
     break;
   }
   case DcMacPacket::data: {
@@ -778,6 +863,9 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
       if (!npkt->PacketIsOk()) {
         Log->critical("Data packet corrupted");
       }
+      auto src = pkt->GetSrc();
+      _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src - 1)));
+      _replyAckPending = true;
       PushNewRxPacket(npkt);
     } else {
       Log->debug("DATA detected");

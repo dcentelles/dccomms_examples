@@ -36,9 +36,9 @@ public:
 
   uint8_t GetDst();
   uint8_t GetSrc();
-  void SetMasterAckMask(const uint8_t &mask);
+  void SetMasterAckMask(const DcMacAckField &mask);
   void SetSlaveAck(uint8_t slave);
-  void ReinitSlaveAckMask();
+  void SetSlaveAckMask(const DcMacAckField & mask);
 
   uint8_t GetMasterAckMask();
 
@@ -168,6 +168,7 @@ private:
   struct SlaveRTS {
     bool req;
     uint16_t reqmillis, reqdatasize;
+    uint16_t dst;
     uint32_t ctsBytes;
   };
 
@@ -207,6 +208,9 @@ private:
   bool _ackReceived;
   bool _sendingDataPacket;
   uint32_t _sendingDataPacketSize;
+  bool _replyAckPending;
+  bool _waitingForAck;
+  DcMacAckField _lastDataReceivedFrom;
 };
 
 } // namespace dccomms_examples
