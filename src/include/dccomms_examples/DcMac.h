@@ -32,12 +32,13 @@ public:
   Type GetType();
   void SetRtsDataSize(const DcMacRtsDataSizeField &tt);
   DcMacRtsDataSizeField GetRtsDataSize();
-  bool GetSlaveAck(uint8_t slave);
+  bool GetSlaveAck(uint8_t node);
+  DcMacAckField GetSlaveAckMask();
 
   uint8_t GetDst();
   uint8_t GetSrc();
   void SetMasterAckMask(const DcMacAckField &mask);
-  void SetSlaveAck(uint8_t slave);
+  void SetSlaveAck(uint8_t node);
   void SetSlaveAckMask(const DcMacAckField & mask);
 
   uint8_t GetMasterAckMask();

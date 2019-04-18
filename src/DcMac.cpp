@@ -49,17 +49,19 @@ int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
   return size;
 }
 
-bool DcMacPacket::GetSlaveAck(uint8_t slave) {
-  return *_slaveAckMask & (0x08 << (slave - 1));
+bool DcMacPacket::GetSlaveAck(uint8_t node) {
+  return *_slaveAckMask & (0x08 << (node));
 }
-void DcMacPacket::SetSlaveAck(uint8_t slave) {
-  *_slaveAckMask = *_slaveAckMask | (0x08 << (slave - 1));
+void DcMacPacket::SetSlaveAck(uint8_t node) {
+  *_slaveAckMask = *_slaveAckMask | (0x08 << (node));
 }
 
 void DcMacPacket::SetSlaveAckMask(const DcMacAckField &mask) {
   *_slaveAckMask = *_slaveAckMask & 0x07;
   *_slaveAckMask = *_slaveAckMask | (mask << 3);
 }
+
+DcMacAckField DcMacPacket::GetSlaveAckMask() { return (*_slaveAckMask >> 3); }
 
 void DcMacPacket::SetMasterAckMask(const DcMacAckField &mask) {
   *_masterAckMask = mask;
@@ -806,10 +808,14 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::rts: {
-    //    if(_addr == pkt->GetSlaveAck(0))
-    //    {
-    //        //L
-    //    }
+    if (pkt->GetSlaveAckMask()) {
+      if (pkt->GetSlaveAck(_addr)) {
+        Log->debug("ACK received from {}", pkt->GetSrc());
+        // TODO: implement data transfer from master to slave
+      } else {
+        Log->debug("ACK detected from {}", pkt->GetSrc());
+      }
+    }
     _rtsDataSize = pkt->GetRtsDataSize();
     if (_rtsDataSize > 0) {
       _status = rtsreceived;
@@ -888,7 +894,7 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
         Log->critical("Data packet corrupted from {}", pkt->GetSrc());
       }
       auto src = pkt->GetSrc();
-      _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src - 1)));
+      _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src)));
       _replyAckPending = true;
       PushNewRxPacket(npkt);
     } else {
