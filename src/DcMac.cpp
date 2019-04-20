@@ -240,6 +240,8 @@ CLASS_LOADER_REGISTER_CLASS(DcMacPacketBuilder, IPacketBuilder)
 
 DcMac::DcMac() {
   _maxQueueSize = 1024;
+  _txQueueSize = 0;
+  _rxQueueSize = 0;
   _started = false;
   _pb = CreateObject<DcMacPacketBuilder>();
   _devIntrinsicDelay = 0;
@@ -404,6 +406,7 @@ void DcMac::PushNewTxPacket(PacketPtr pkt) {
   PacketPtr dlf = pkt->CreateCopy();
   _txfifo_mutex.lock();
   auto size = dlf->GetPacketSize();
+  Log->debug("Tx queue: {} : {}", _txQueueSize, _maxQueueSize);
   if (size + _txQueueSize <= _maxQueueSize) {
     _txQueueSize += size;
     _txfifo.push(dlf);
@@ -462,7 +465,7 @@ void DcMac::SlaveRunTx() {
       lock.unlock();
       if (_sendingDataPacket && _txDataPacket->GetDestAddr() == 0) {
         _waitingForAck = false;
-        if (_ackMask & (1 << (_addr - 1))) {
+        if (_ackMask & (1 << (_addr))) {
           Log->debug("MASTER DATA SUCCESS");
           _sendingDataPacket = false;
         } else {
@@ -472,8 +475,8 @@ void DcMac::SlaveRunTx() {
       if (!_sendingDataPacket) {
         Log->debug("Check data in tx buffer");
         _txUpperPkt = GetLastTxPacket();
-        PopLastTxPacket();
         if (_txUpperPkt) {
+          PopLastTxPacket();
           Log->debug("Data in tx buffer. Seq: {}", _txUpperPkt->GetSeq());
           _sendingDataPacketSize = _txUpperPkt->GetPacketSize();
           _txDataPacket->SetDestAddr(_txUpperPkt->GetDestAddr());
@@ -587,22 +590,22 @@ void DcMac::SlaveRunTx() {
         Log->debug("WAIT CTS");
       }
 
+      std::unique_lock<std::mutex> statusLock(_status_mutex);
       while (_status != syncreceived && _status != ctsreceived) {
-        std::unique_lock<std::mutex> statusLock(_status_mutex);
         _status_cond.wait(statusLock);
-        if (_status == ctsreceived) {
-          if (_txDataPacket->PacketIsOk()) {
-            _stream << _txDataPacket;
-            Log->debug("SEND DATA. Seq {} ; Size {}", _txDataPacket->GetSeq(),
-                       _sendingDataPacketSize);
-            if (_txDataPacket->GetDestAddr() != 0)
-              dataSentToSlave = true;
-            else
-              dataSentToSlave = false;
-            _waitingForAck = true;
-          } else {
-            Log->critical("data packet corrupt before transmitting");
-          }
+      }
+      if (_status == ctsreceived) {
+        if (_txDataPacket->PacketIsOk()) {
+          _stream << _txDataPacket;
+          Log->debug("SEND DATA. Seq {} ; Size {}", _txDataPacket->GetSeq(),
+                     _sendingDataPacketSize);
+          if (_txDataPacket->GetDestAddr() != 0)
+            dataSentToSlave = true;
+          else
+            dataSentToSlave = false;
+          _waitingForAck = true;
+        } else {
+          Log->critical("data packet corrupt before transmitting");
         }
       }
     }
@@ -741,7 +744,7 @@ void DcMac::MasterRunTx() {
                   _status == datareceived) {
                 Log->debug("Data detected from slave {}", slaveAddr);
                 if (winnerSlave->dst == 0)
-                  _ackMask |= (1 << (slaveAddr - 1));
+                  _ackMask |= (1 << (slaveAddr));
               } else if (res == std::cv_status::timeout) {
                 _time = RelativeTime::GetMillis();
                 if (_status != datareceived && winnerSlave->dst == _addr)
@@ -757,14 +760,37 @@ void DcMac::MasterRunTx() {
           }
         }
       }
-      this_thread::sleep_for(milliseconds(10));
-
-      // Check if there are packets in txfifo
-      std::unique_lock<std::mutex> txfifoLock(_txfifo_mutex);
-      if (!_txfifo.empty()) {
-        pkt = _txfifo.front();
-        _txfifo.pop();
+      if (!_sendingDataPacket) {
+        Log->debug("Check data in tx buffer");
+        _txUpperPkt = GetLastTxPacket();
+        if (_txUpperPkt) {
+          PopLastTxPacket();
+          Log->debug("Data in tx buffer. Seq: {}", _txUpperPkt->GetSeq());
+          _sendingDataPacketSize = _txUpperPkt->GetPacketSize();
+          _txDataPacket->SetDestAddr(_txUpperPkt->GetDestAddr());
+          _txDataPacket->SetSrcAddr(_addr);
+          _txDataPacket->SetPayload(_txUpperPkt->GetBuffer(),
+                                    _sendingDataPacketSize);
+          _txDataPacket->SetSeq(_txUpperPkt->GetSeq());
+          _txDataPacket->UpdateFCS();
+          _sendingDataPacket = true;
+          _waitingForAck = false;
+          Log->debug("Data packet for transmitting");
+        }
+      } else {
+        if (_txDataPacket->PacketIsOk()) {
+          _stream << _txDataPacket;
+          Log->debug("SEND DATA. Seq {} ; Size {}", _txDataPacket->GetSeq(),
+                     _sendingDataPacketSize);
+          _waitingForAck = true;
+          double tt = GetPktTransmissionMillis(_txDataPacket->GetPacketSize());
+          this_thread::sleep_for(
+              milliseconds(static_cast<int>(std::round(tt))));
+        } else {
+          Log->critical("data packet corrupt before transmitting");
+        }
       }
+      this_thread::sleep_for(milliseconds(10));
     }
   });
   _tx.detach();
@@ -811,10 +837,14 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     if (pkt->GetSlaveAckMask()) {
       if (pkt->GetSlaveAck(_addr)) {
         Log->debug("ACK received from {}", pkt->GetSrc());
-        // TODO: implement data transfer from master to slave
+        _sendingDataPacket = false;
       } else {
         Log->debug("ACK detected from {}", pkt->GetSrc());
+        if (_waitingForAck) {
+          Log->warn("DATA LOST");
+        }
       }
+      _waitingForAck = false;
     }
     _rtsDataSize = pkt->GetRtsDataSize();
     if (_rtsDataSize > 0) {
@@ -833,8 +863,8 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::data: {
+    _status = datareceived;
     if (dst == _addr) {
-      _status = datareceived;
       Log->debug("DATA received from {}", pkt->GetSrc());
       auto npkt = _highPb->Create();
       uint8_t *payload = pkt->GetPayloadBuffer();
@@ -842,6 +872,9 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
       if (!npkt->PacketIsOk()) {
         Log->critical("Data packet corrupted from {}", pkt->GetSrc());
       }
+      auto src = pkt->GetSrc();
+      _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src)));
+      _replyAckPending = true;
       PushNewRxPacket(npkt);
     } else {
       Log->debug("DATA detected from {}", pkt->GetSrc());
