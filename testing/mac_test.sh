@@ -98,6 +98,31 @@ END{\
 	printf("%.9f\t%.9f\t%.9f\n", avg, sd, var);
 }'
 
+awkjitter='
+BEGIN{\
+	samples = 0
+	sum = 0
+	sum2 = 0
+}
+{\
+	if (samples > 0)
+	{
+		gap = ($2 - old2)
+		gap = gap < 0 ? -gap : gap
+		printf("%d\t%.9f\n", $1, gap)
+		sum += gap
+		sum2 += gap * gap
+	}
+	samples += 1
+	old2 = $2
+}
+END{\
+	avg = sum / samples
+	var = (sum2 - (avg * sum)) / (samples)
+	sd = sqrt(var)
+	printf("%.9f\t%.9f\t%.9f\n", avg, sd, var);
+}'
+
 awkthroughput='
 BEGIN{\
 	nbytes = 0
@@ -226,11 +251,11 @@ scenesdir=$(rospack find uwsim)/data/scenes
 
 if [ "$protocol" == "dcmac" ]
 then
-	tmplscene=$scenesdir/netsim_twinbot_dcmac.xml
+	tmplscene=$scenesdir/netsim_twinbot_dcmac_4slaves.xml
 	scene=$scenesdir/$protocol.xml
 	cp $tmplscene $scene
 else
-	tmplscene=$scenesdir/netsim_twinbot_mac.xml
+	tmplscene=$scenesdir/netsim_twinbot_mac_4slaves.xml
 	scene=$scenesdir/$protocol.xml
 	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
 fi
@@ -289,27 +314,27 @@ then
 	txRaw=$txRawDcMac
 	echo "base"
 	baseapplog="$rawlogdir/g500_s100.log"
-	${bindir}/example4 --num-packets 0 --node-name g500_s100 --dcmac --master --add 0 --data-rate 100 --log-file "$baseapplog" --ms-start 0 & 
+	${bindir}/example4 --num-packets 0 --node-name g500_s100 --dcmac --master --add 0 --data-rate 100 --log-file "$baseapplog" --ms-start 0 --propSpeed 1500 & 
 	base=$!
 
 	echo "tx0"
 	tx0applog="$rawlogdir/bluerov2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 2000 &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 2000 --propSpeed 1500 &
 	tx0=$!
 
 	echo "tx1"
 	tx1applog="$rawlogdir/bluerov2_f_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 2000 &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 2000 --propSpeed 1500 &
 	tx1=$!
 
 	echo "tx2"
 	tx2applog="$rawlogdir/bluerov2_f2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 2000 &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 2000 --propSpeed 1500 &
 	tx2=$!
 
 	echo "tx3"
 	tx3applog="$rawlogdir/bluerov2_f3_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 2000 &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 2000 --propSpeed 1500 &
 	tx3=$!
 else
 	echo "base"
@@ -392,7 +417,7 @@ do
 	echo "RX ipg (IAT)"
 	cat rx.tr | awk "$awkgap" > iat.tr.tmp
 	cat iat.tr.tmp | head -n -1 > iat.tr
-	cat iat.tr.tmp | tail -n 1 > jitter
+	cat iat.tr.tmp | tail -n 1 > iat
 	
 	rm -f *.tmp
 	
@@ -411,10 +436,10 @@ do
 	declare $(awk -v devname=$txdevname "$colScript" $uwsimlog)
 
 	efficiency=$(bc <<< "scale=9; $nbytes / $totalTxBytes * 100")
-	if [ "$protocol" != "dcmac" ]
-	then
-		efficiency2=$(bc <<< "scale=9; $nbytes / $totalTxBytes2 * 100")
-	fi
+#	if [ "$protocol" != "dcmac" ]
+#	then
+#		efficiency2=$(bc <<< "scale=9; $nbytes / $totalTxBytes2 * 100")
+#	fi
 
 	echo -e "\tbytes received  ---------  $nbytes bytes" | tee -a genresults
 	throughput=$(bc <<< "scale=9; $nbytes / $elapsed")
@@ -425,10 +450,10 @@ do
 	echo -e "\tTotal collisioned bytes -- $totalColBytes" | tee -a genresults
 	echo -e "\tTotal collisioned pkts --- $totalColPackets" | tee -a genresults
 	echo -e "\tEfficiency --------------- $efficiency" | tee -a genresults
-	if [ "$protocol" != "dcmac" ]
-	then
-		echo -e "\tEfficiency2 -------------- $efficiency2" | tee -a genresults
-	fi
+#	if [ "$protocol" != "dcmac" ]
+#	then
+#		echo -e "\tEfficiency2 -------------- $efficiency2" | tee -a genresults
+#	fi
 	
 	############### END 2 END ################3
 	rm -f end2end.tr
@@ -466,6 +491,12 @@ do
 	echo "End To End:" | tee -a genresults
 	cat end2end.tr | awk -v col=2 "$awkavg" > end2end
 	cat end2end | tee -a genresults
+
+	cat end2end.tr | awk "$awkjitter" > jitter.tr.tmp
+	cat jitter.tr.tmp | head -n -1 > jitter.tr
+	cat jitter.tr.tmp | tail -n 1 > jitter
+	cat jitter | tee -a genresults
+	rm -f *.tmp
 done
 cd $basedir
 echo "Moving remaining log files..."
