@@ -1,7 +1,7 @@
 #!/bin/bash
 
 scriptName=$(basename $0)
-scriptPath=$0
+scriptPath=$(realpath $0)
 echo $scriptName
 pid=$$
 
@@ -308,7 +308,7 @@ echo "ROSRUN: $rosrunproc ; SIM: $sim"
 
 echo $rosrunproc > rosrunpid
 echo $sim > simpid
-sleep 30s
+sleep 40s
 
 if [ "$protocol" == "dcmac" ]
 then
@@ -389,7 +389,7 @@ kill -9 $base > /dev/null 2> /dev/null
 kill -9 $rosrunproc > /dev/null 2> /dev/null
 kill -9 $sim > /dev/null 2> /dev/null
 
-sleep 2s
+sleep 5s
 
 for pair in $tx0applog:$baseapplog:1 $tx1applog:$baseapplog:2 $tx2applog:$baseapplog:3 $tx3applog:$baseapplog:4
 do
@@ -503,6 +503,8 @@ done
 cd $basedir
 echo "Moving remaining log files..."
 sleep 4s
+mv $uwsimlog $resultsdir
+mv $uwsimlograw $resultsdir
 mv $scene $resultsdir
 mv $datereffile $resultsdir
 mv $rawlogdir $resultsdir
