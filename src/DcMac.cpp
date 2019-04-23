@@ -406,7 +406,6 @@ void DcMac::PushNewTxPacket(PacketPtr pkt) {
   PacketPtr dlf = pkt->CreateCopy();
   _txfifo_mutex.lock();
   auto size = dlf->GetPacketSize();
-  Log->debug("Tx queue: {} : {}", _txQueueSize, _maxQueueSize);
   if (size + _txQueueSize <= _maxQueueSize) {
     _txQueueSize += size;
     _txfifo.push(dlf);

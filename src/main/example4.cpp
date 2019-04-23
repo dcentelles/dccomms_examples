@@ -255,6 +255,7 @@ int main(int argc, char **argv) {
   Ptr<Logger> log = CreateObject<Logger>();
   if (logFile != "") {
     log->LogToFile(logFile);
+    node->LogToFile(logFile+".node.log");
   }
   log->SetLogLevel(logLevel);
   log->SetLogName(nodeName);
