@@ -17,7 +17,7 @@ echo "npkts: $npkts"
 echo "testduration: $testduration"
 echo "protocol: $protocol"
 
-basedir=$(pwd)/
+basedir=$(realpath ${6}/)
 echo "BASEDIR: $basedir"
 bindir="../build/" #TODO: as argument
 resultsdir=$basedir/results
@@ -248,6 +248,8 @@ kill -9 $sim > /dev/null 2> /dev/null
 sleep 5s
 
 scenesdir=$(rospack find uwsim)/data/scenes
+uwsimlog=$(realpath $basedir/uwsimnet.log)
+uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
 if [ "$protocol" == "dcmac" ]
 then
@@ -260,18 +262,18 @@ else
 	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
 fi
 
+uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
+sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
+
 cat $scene
 
 if [ "$protocol" == "dcmac" ]
 then
-	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee uwsimnet.log.raw & 
+	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 else
-	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee uwsimnet.log.raw & 
+	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 fi
 
-
-uwsimlog=$basedir/uwsimnet.log
-uwsimlograw=$basedir/uwsim.log.raw
 
 sleep 5s
 rosrunproc=$!
@@ -306,7 +308,7 @@ echo "ROSRUN: $rosrunproc ; SIM: $sim"
 
 echo $rosrunproc > rosrunpid
 echo $sim > simpid
-sleep 20s
+sleep 30s
 
 if [ "$protocol" == "dcmac" ]
 then
@@ -501,8 +503,6 @@ done
 cd $basedir
 echo "Moving remaining log files..."
 sleep 4s
-mv uwsimnet.log $resultsdir
-mv uwsimnet.log.raw $resultsdir
 mv $scene $resultsdir
 mv $datereffile $resultsdir
 mv $rawlogdir $resultsdir
