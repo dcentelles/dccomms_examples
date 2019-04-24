@@ -51,8 +51,8 @@ minend2endSd=$maxvalue
 maxthroughput=$minvalue
 minthroughput=$maxvalue
 
-mineff=$maxvalue
-maxeff=$minvalue
+mineffic=$maxvalue
+maxeffic=$minvalue
 
 minpktcols=$maxvalue
 maxpktcols=$minvalue
@@ -136,7 +136,6 @@ do
 				then
 					continue
 				fi
-
 				resdir=$flowdir
 				node=${flowdir%%.*}; node=${node%%_s100}; node=${node##/*/}
 				proto=$(basename $protodir)
@@ -210,7 +209,6 @@ do
 
 				echo -e "$proto\t$apprate\t$pktsize\t$throughput" >> $throughputdir/${node}.dat
 
-			
 				####### PKT COLLISIONS
 				pktcols=$(cat $resdir/genresults | awk "$getpktcols")
 				if [[ $(echo $pktcols'<'$minpktcols | bc -l) -eq 1 ]]
