@@ -24,7 +24,7 @@ resultsdir=$basedir/results
 rawlogdir=$basedir/rawlog
 
 rm -rf $resultsdir $rawlogdir
-sudo rm -rf /dev/mqueue/*
+rm -rf /dev/mqueue/*
 
 mkdir -p $resultsdir
 mkdir -p $rawlogdir

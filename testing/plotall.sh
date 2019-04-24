@@ -20,12 +20,18 @@ jittersddir=$dataplotdir/jittersd
 jitteravgdir=$dataplotdir/jitteravg
 end2endsddir=$dataplotdir/end2endsd
 end2endavgdir=$dataplotdir/end2endavg
+pktcolsdir=$dataplotdir/pktcols
+bytecolsdir=$dataplotdir/bytecols
+efficdir=$dataplotdir/effic
 
 mkdir -p $throughputdir
 mkdir -p $jittersddir
 mkdir -p $jitteravgdir
 mkdir -p $end2endsddir
 mkdir -p $end2endavgdir
+mkdir -p $pktcolsdir
+mkdir -p $bytecolsdir
+mkdir -p $efficdir
 
 minvalue=-999999999
 maxvalue=999999999
@@ -44,6 +50,63 @@ minend2endSd=$maxvalue
 
 maxthroughput=$minvalue
 minthroughput=$maxvalue
+
+mineff=$maxvalue
+maxeff=$minvalue
+
+minpktcols=$maxvalue
+maxpktcols=$minvalue
+
+minbytecols=$maxvalue
+maxbytecols=$minvalue
+
+getbytecols='
+BEGIN{\
+	nbytes = 0
+}
+{\
+	where = match($0, "Total collisioned bytes -- (.+)$", arr)
+	if(where != 0)
+	{
+		printf("%s\n", arr[1])
+	}
+}
+END{\
+}
+'
+
+getpktcols='
+BEGIN{\
+	nbytes = 0
+}
+{\
+	where = match($0, "Total collisioned pkts --- (.+)$", arr)
+	if(where != 0)
+	{
+		printf("%s\n", arr[1])
+	}
+}
+END{\
+}
+'
+
+geteffic='
+BEGIN{\
+	nbytes = 0
+}
+{\
+	where = match($0, "Efficiency --------------- (.+)$", arr)
+	if(where != 0)
+	{
+		printf("%s\n", arr[1])
+	}
+}
+END{\
+}
+'
+#cat genresults | awk "$getbytecols" 
+#cat genresults | awk "$getpktcols" 
+#cat genresults | awk "$geteffic" 
 
 for ratedir in $basedir/*
 do
@@ -95,7 +158,7 @@ do
 				then
 					maxend2end=$end2endAvg 
 				fi
-					if [[ $(echo $end2endSd'<'$minend2endSd | bc -l) -eq 1 ]]
+				if [[ $(echo $end2endSd'<'$minend2endSd | bc -l) -eq 1 ]]
 				then
 					minend2endSd=$end2endSd 
 				fi
@@ -119,7 +182,7 @@ do
 				then
 					maxjitter=$jitterAvg 
 				fi
-					if [[ $(echo $jitterSd'<'$minjitterSd | bc -l) -eq 1 ]]
+				if [[ $(echo $jitterSd'<'$minjitterSd | bc -l) -eq 1 ]]
 				then
 					minjitterSd=$jitterSd 
 				fi
@@ -131,6 +194,7 @@ do
 
 				echo -e "$proto\t$apprate\t$pktsize\t$jitterAvg" >> $jitteravgdir/${node}.dat
 				echo -e "$proto\t$apprate\t$pktsize\t$jitterSd" >> $jittersddir/${node}.dat
+
 				#### THROUGHPUT ####
 				throughput=$(cat $resdir/throughput)
 					
@@ -145,6 +209,46 @@ do
 				fi
 
 				echo -e "$proto\t$apprate\t$pktsize\t$throughput" >> $throughputdir/${node}.dat
+
+			
+				####### PKT COLLISIONS
+				pktcols=$(cat $resdir/genresults | awk "$getpktcols")
+				if [[ $(echo $pktcols'<'$minpktcols | bc -l) -eq 1 ]]
+				then
+					minpktcols=$pktcols
+				fi
+
+				if [[ $(echo $pktcols'>'$maxpktcols | bc -l) -eq 1 ]]
+				then
+					maxpktcols=$pktcols
+				fi
+				echo -e "$proto\t$apprate\t$pktsize\t$pktcols" >> $pktcolsdir/${node}.dat
+
+				####### BYTE COLLISIONS
+				bytecols=$(cat $resdir/genresults | awk "$getbytecols")
+				if [[ $(echo $bytecols'<'$minbytecols | bc -l) -eq 1 ]]
+				then
+					minbytecols=$bytecols
+				fi
+
+				if [[ $(echo $bytecols'>'$maxbytecols | bc -l) -eq 1 ]]
+				then
+					maxbytecols=$bytecols
+				fi
+				echo -e "$proto\t$apprate\t$pktsize\t$bytecols" >> $bytecolsdir/${node}.dat
+
+				####### EFFIC
+				effic=$(cat $resdir/genresults | awk "$geteffic")
+				if [[ $(echo $effic'<'$mineffic | bc -l) -eq 1 ]]
+				then
+					mineffic=$effic
+				fi
+
+				if [[ $(echo $effic'>'$maxeffic | bc -l) -eq 1 ]]
+				then
+					maxeffic=$effic
+				fi
+				echo -e "$proto\t$apprate\t$pktsize\t$effic" >> $efficdir/${node}.dat
 			done
 		done
 	done
