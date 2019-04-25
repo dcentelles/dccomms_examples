@@ -24,6 +24,8 @@ pktcolsdir=$dataplotdir/pktcols
 bytecolsdir=$dataplotdir/bytecols
 efficdir=$dataplotdir/effic
 
+genresultsfile=$dataplotdir/genresults.txt
+
 mkdir -p $throughputdir
 mkdir -p $jittersddir
 mkdir -p $jitteravgdir
@@ -252,3 +254,26 @@ do
 	done
 done
 
+echo "Max. jitter avg: $maxjitter" | tee -a $genresultsfile
+echo -ne "Min. jitter avg: $minjitter\n\n" | tee -a $genresultsfile
+
+echo "Max. jitter sd: $maxjitterSd" | tee -a $genresultsfile
+echo -ne "Min. jitter sd: $minjitterSd\n\n" | tee -a $genresultsfile
+
+echo "Max. e2e avg: $maxend2end" | tee -a $genresultsfile
+echo -ne "Min. e2e avg: $minend2end\n\n" | tee -a $genresultsfile
+
+echo "Max. e2e sd: $maxend2endSd" | tee -a $genresultsfile
+echo -ne "Min. e2e sd: $minend2endSd\n\n" | tee -a $genresultsfile
+
+echo "Max. throughput: $maxthroughput" | tee -a $genresultsfile
+echo -ne "Min. throughput: $minthroughput\n\n" | tee -a $genresultsfile
+
+echo "Max. effic: $maxeffic" | tee -a $genresultsfile
+echo -ne "Min. effic: $mineffic\n\n" | tee -a $genresultsfile
+
+echo "Max. pktcols: $maxpktcols" | tee -a $genresultsfile
+echo -ne "Min. pktcols: $minpktcols\n\n" | tee -a $genresultsfile
+
+echo "Max. bytecols: $maxbytecols" | tee -a $genresultsfile
+echo -ne "Min. bytecols: $minbytecols\n\n" | tee -a $genresultsfile
