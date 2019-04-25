@@ -63,7 +63,7 @@ public:
 
   void UpdateFCS();
   static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, CTSRTS_FIELD_SIZE = 2,
-                   PAYLOAD_SIZE_FIELD_SIZE = 1, MAX_PAYLOAD_SIZE = UINT8_MAX,
+                   PAYLOAD_SIZE_FIELD_SIZE = 1, MAX_PAYLOAD_SIZE = 2048,
                    SYNC_FIELD_SIZE = 1,
                    FCS_SIZE = 2; // CRC16
 private:
@@ -85,7 +85,9 @@ private:
   uint16_t _GetRtsDataSize();
   void _Init();
   bool _CheckFCS();
-  int _GetTypeSize(Type type, uint8_t *buffer);
+  inline int _GetTypeSize(Type type, uint8_t *buffer);
+  inline void _SetPayloadSizeField(uint16_t);
+  inline uint16_t _GetPayloadSizeFromBuffer(uint8_t *buffer);
 };
 
 typedef std::shared_ptr<DcMacPacket> DcMacPacketPtr;

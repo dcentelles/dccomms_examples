@@ -4,6 +4,7 @@
 #include <dccomms/dccomms.h>
 #include <dccomms_examples/DcMac.h>
 #include <dccomms_packets/SimplePacket.h>
+#include <dccomms_packets/VariableLength2BPacket.h>
 #include <dccomms_packets/VariableLengthPacket.h>
 #include <iostream>
 
@@ -33,8 +34,8 @@ int main(int argc, char **argv) {
            devBitRate = 1800;
   double devIntrinsicDelay = 0, maxDistance = 15, propSpeed = 3e8;
   uint64_t msStart = 0;
-  enum PktType { DLF = 0, VL = 1, SP = 2 };
-  uint32_t txPktTypeInt = 1, rxPktTypeInt = 1;
+  enum PktType { DLF = 0, VL = 1, SP = 2, VL2 = 3 };
+  uint32_t txPktTypeInt = 3, rxPktTypeInt = 3;
   bool flush = false, syncLog = false, disableRx = false, dcmac = false,
        dcmacmaster = false;
   try {
@@ -66,10 +67,12 @@ int main(int argc, char **argv) {
             std::to_string(devBitRate) + ")",
         cxxopts::value<uint32_t>(devBitRate))(
         "tx-packet-type",
-        "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket.",
+        "0: DataLinkFrame, 1: VariableLengthPacket, 2: SimplePacket, 3: "
+        "VariableLengthPacket2B (default)",
         cxxopts::value<uint32_t>(txPktTypeInt))(
         "rx-packet-type",
-        "0: DataLinkFrame, 1: VariableLengthPacket (default), 2: SimplePacket",
+        "0: DataLinkFrame, 1: VariableLengthPacket, 2: SimplePacket, 3: "
+        "VariableLengthPacket2B (default)",
         cxxopts::value<uint32_t>(rxPktTypeInt))("add", "Device address",
                                                 cxxopts::value<uint32_t>(add))(
         "dstadd",
@@ -158,6 +161,14 @@ int main(int argc, char **argv) {
     payloadSize = txPacketSize - emptyPacketSize;
     break;
   }
+  case VL2: {
+    txpb = CreateObject<VariableLength2BPacketBuilder>();
+    txPacket = txpb->Create();
+    txPacket->PayloadUpdated(0);
+    auto emptyPacketSize = txPacket->GetPacketSize();
+    payloadSize = txPacketSize - emptyPacketSize;
+    break;
+  }
   case SP: {
     txpb = CreateObject<SimplePacketBuilder>(0, FCS::CRC16);
     txPacket = txpb->Create();
@@ -185,6 +196,10 @@ int main(int argc, char **argv) {
   }
   case VL: {
     rxpb = CreateObject<VariableLengthPacketBuilder>();
+    break;
+  }
+  case VL2: {
+    rxpb = CreateObject<VariableLength2BPacketBuilder>();
     break;
   }
   case SP: {
@@ -255,7 +270,7 @@ int main(int argc, char **argv) {
   Ptr<Logger> log = CreateObject<Logger>();
   if (logFile != "") {
     log->LogToFile(logFile);
-    node->LogToFile(logFile+".node.log");
+    node->LogToFile(logFile + ".node.log");
   }
   log->SetLogLevel(logLevel);
   log->SetLogName(nodeName);

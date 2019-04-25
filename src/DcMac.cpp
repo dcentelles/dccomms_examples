@@ -25,9 +25,9 @@ void DcMacPacket::_Init() {
   _rtsSizeByte0 = _variableArea;
   _rtsSizeByte1 = _rtsSizeByte0 + 1;
   _payloadSize = _variableArea;
-  *_payloadSize = 0;
   _payload = _payloadSize + 1;
-  _fcs = _payload + *_payloadSize;
+  _fcs = _payload + 0;
+  _SetPayloadSizeField(0);
 }
 
 int DcMacPacket::GetPayloadSizeFromPacketSize(int size) {
@@ -36,12 +36,12 @@ int DcMacPacket::GetPayloadSizeFromPacketSize(int size) {
          DcMacPacket::FCS_SIZE;
 }
 
-int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
+inline int DcMacPacket::_GetTypeSize(Type ptype, uint8_t *buffer) {
   int size;
   if (ptype == Type::cts || ptype == Type::rts) {
     size = CTSRTS_FIELD_SIZE;
   } else if (ptype == data) {
-    uint8_t payloadSize = *buffer;
+    uint16_t payloadSize = _GetPayloadSizeFromBuffer(buffer);
     size = PAYLOAD_SIZE_FIELD_SIZE + payloadSize;
   } else if (ptype == sync) { // sync
     size = SYNC_FIELD_SIZE;
@@ -70,20 +70,28 @@ void DcMacPacket::SetMasterAckMask(const DcMacAckField &mask) {
 uint8_t DcMacPacket::GetMasterAckMask() { return *_masterAckMask; }
 
 void DcMacPacket::DoCopyFromRawBuffer(void *buffer) {
-  uint8_t *type = (uint8_t *)buffer + PRE_SIZE + ADD_SIZE;
-  Type ptype = _GetType(type);
-  int size = PRE_SIZE + _prefixSize + _GetTypeSize(ptype, type + FLAGS_SIZE) +
-             FCS_SIZE;
+  uint8_t *flags = (uint8_t *)buffer + PRE_SIZE + ADD_SIZE;
+  Type ptype = _GetType(flags);
+  int size = PRE_SIZE + _prefixSize + _GetTypeSize(ptype, flags) + FCS_SIZE;
   memcpy(GetBuffer(), buffer, size);
 }
 
 inline uint8_t *DcMacPacket::GetPayloadBuffer() { return _payload; }
 
-inline uint32_t DcMacPacket::GetPayloadSize() { return *_payloadSize; }
+inline uint32_t DcMacPacket::GetPayloadSize() {
+  return _GetPayloadSizeFromBuffer(_flags);
+}
+
+inline uint16_t DcMacPacket::_GetPayloadSizeFromBuffer(uint8_t *buffer) {
+  uint32_t value = 0;
+  value = (value | *buffer & 0x70) << 4;
+  value = value | *(buffer + 1);
+  return value;
+}
 
 inline int DcMacPacket::GetPacketSize() {
   Type ptype = GetType();
-  return _overheadSize + _GetTypeSize(ptype, _variableArea);
+  return _overheadSize + _GetTypeSize(ptype, _flags);
 }
 
 void DcMacPacket::Read(Stream *stream) {
@@ -118,19 +126,24 @@ void DcMacPacket::Read(Stream *stream) {
   }
 } // namespace dccomms_examples
 
+inline void DcMacPacket::_SetPayloadSizeField(uint16_t payloadSize) {
+  *_payloadSize = payloadSize & 0xff;
+  *_flags = (*_flags & 0x8f) | ((payloadSize >> 4) & 0x70);
+}
+
 void DcMacPacket::PayloadUpdated(uint32_t payloadSize) {
   SetType(data);
-  *_payloadSize = payloadSize;
-  _fcs = _payload + *_payloadSize;
+  _SetPayloadSizeField(payloadSize);
+  _fcs = _payload + payloadSize;
   UpdateFCS();
 }
 
 uint32_t DcMacPacket::SetPayload(uint8_t *data, uint32_t size) {
   SetType(Type::data);
   auto copySize = MAX_PAYLOAD_SIZE < size ? MAX_PAYLOAD_SIZE : size;
-  *_payloadSize = size;
+  _SetPayloadSizeField(copySize);
   memcpy(_payload, data, copySize);
-  _fcs = _payload + *_payloadSize;
+  _fcs = _payload + copySize;
   return copySize;
 }
 
@@ -142,9 +155,10 @@ void DcMacPacket::UpdateFCS() {
       crc = Checksum::crc16(_add, _prefixSize + CTSRTS_FIELD_SIZE);
       _fcs = _variableArea + CTSRTS_FIELD_SIZE;
     } else if (type == data) {
-      crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD_SIZE +
-                                      *_payloadSize);
-      _fcs = _variableArea + PAYLOAD_SIZE_FIELD_SIZE + *_payloadSize;
+      auto psize = GetPayloadSize();
+      crc =
+          Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD_SIZE + psize);
+      _fcs = _variableArea + PAYLOAD_SIZE_FIELD_SIZE + psize;
     } else if (type == sync) { // sync
       crc = Checksum::crc16(_add, _prefixSize + SYNC_FIELD_SIZE);
       _fcs = _variableArea + SYNC_FIELD_SIZE;
@@ -166,7 +180,7 @@ bool DcMacPacket::_CheckFCS() {
       crc = Checksum::crc16(_add, _prefixSize + CTSRTS_FIELD_SIZE + FCS_SIZE);
     } else if (type == data) {
       crc = Checksum::crc16(_add, _prefixSize + PAYLOAD_SIZE_FIELD_SIZE +
-                                      *_payloadSize + FCS_SIZE);
+                                      GetPayloadSize() + FCS_SIZE);
     } else if (type == sync) { // sync
       crc = Checksum::crc16(_add, _prefixSize + SYNC_FIELD_SIZE + FCS_SIZE);
     }
@@ -864,12 +878,15 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
   case DcMacPacket::data: {
     _status = datareceived;
     if (dst == _addr) {
-      Log->debug("DATA received from {}", pkt->GetSrc());
+      Log->debug("DATA received from {} (Seq: {})", pkt->GetSrc(), pkt->GetSeq());
       auto npkt = _highPb->Create();
       uint8_t *payload = pkt->GetPayloadBuffer();
-      npkt->CopyFromRawBuffer(payload);
+      npkt->DoCopyFromRawBuffer(payload);
+      npkt->SetVirtualSeq(pkt->GetSeq());
+      npkt->SetVirtualDestAddr(pkt->GetDestAddr());
+      npkt->SetVirtualSrcAddr(pkt->GetSrcAddr());
       if (!npkt->PacketIsOk()) {
-        Log->critical("Data packet corrupted from {}", pkt->GetSrc());
+        Log->critical("Data packet corrupted from {} (Seq: {})", npkt->GetSrcAddr(), npkt->GetSeq());
       }
       auto src = pkt->GetSrc();
       _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src)));
@@ -918,12 +935,15 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
   case DcMacPacket::data: {
     _status = datareceived;
     if (dst == _addr) {
-      Log->debug("DATA received from {}", pkt->GetSrc());
+      Log->debug("DATA received from {} (Seq: {})", pkt->GetSrc(), pkt->GetSeq());
       auto npkt = _highPb->Create();
       uint8_t *payload = pkt->GetPayloadBuffer();
-      npkt->CopyFromRawBuffer(payload);
+      npkt->DoCopyFromRawBuffer(payload);
+      npkt->SetVirtualSeq(pkt->GetSeq());
+      npkt->SetVirtualDestAddr(pkt->GetDestAddr());
+      npkt->SetVirtualSrcAddr(pkt->GetSrcAddr());
       if (!npkt->PacketIsOk()) {
-        Log->critical("Data packet corrupted from {}", pkt->GetSrc());
+        Log->critical("Data packet corrupted from {} (Seq: {})", npkt->GetSrcAddr(), npkt->GetSeq());
       }
       auto src = pkt->GetSrc();
       _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src)));
