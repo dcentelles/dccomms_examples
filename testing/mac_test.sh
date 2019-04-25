@@ -155,79 +155,63 @@ END{\
 
 txRaw='
 BEGIN{\
-	nbytes = 0
+    nbytes = 0
     lines = 0
 }
 {\
-    where = match($0, "MAC TX -- .*"devname)
+    where = match($0, "MAC TX -- .*"devname".* Size: (.*)$", arr)
     if(where != 0)
     {
-	    nbytes += $14
-        lines += 1
+        nbytes += arr[1]
+        lines += 1;
     }
 }
 END{\
-    origBytes = nbytes - lines * 2
-	printf("totalTxBytes=%d\n", nbytes);
+    printf("totalTxBytes=%d\n", nbytes);
     printf("totalTxPackets=%d\n", lines)
-    printf("totalTxBytes2=%d\n", origBytes);
 }'
+
 
 txRawDcMac='
 BEGIN{\
-	nbytes = 0
+    nbytes = 0
     lines = 0
 }
 {\
-    where = match($0, "TX -- .*"devname)
+
+    where = match($0, "TX -- .*"devname".* Size: (.*)$", arr)
     if(where != 0)
     {
-	    nbytes += $16
+	nbytes += arr[1]
         lines += 1
     }
 }
 END{\
-	printf("totalTxBytes=%d\n", nbytes);
+    printf("totalTxBytes=%d\n", nbytes);
     printf("totalTxPackets=%d\n", lines)
 }'
 
 colScript='
 BEGIN{\
-	nbytes = 0
+    nbytes = 0
     lines = 0
 }
 {\
-    where = match($0, "COL -- .*"devname)
+    where = match($0, "COL -- .*"devname".* Size: (.*)$", arr)
     if(where != 0)
     {
-	    nbytes += $16
+	nbytes += arr[1]
         lines += 1
     }
 }
 END{\
-    origBytes = nbytes - lines * 2
-	printf("totalColBytes=%d\n", nbytes);
+    printf("totalColBytes=%d\n", nbytes);
     printf("totalColPackets=%d\n", lines)
-    printf("totalColBytes2=%d\n", origBytes);
 }'
 
-colScriptDcMac='
-BEGIN{\
-	nbytes = 0
-    lines = 0
-}
-{\
-    where = match($0, "COL -- .*"devname)
-    if(where != 0)
-    {
-	    nbytes += $16
-        lines += 1
-    }
-}
-END{\
-	printf("totalColBytes=%d\n", nbytes);
-    printf("totalColPackets=%d\n", lines)
-}'
+
+
+colScriptDcMac=$colScript
 
 ###################################################
 ###################################################
@@ -310,14 +294,14 @@ echo $rosrunproc > rosrunpid
 echo $sim > simpid
 sleep 40s
 
+mnpkts=0
+mpktsize=20
+mdatarate=0
+
 if [ "$protocol" == "dcmac" ]
 then
 	colScript=$colScriptDcMac
 	txRaw=$txRawDcMac
-	echo "base"
-	baseapplog="$rawlogdir/g500_s100.log"
-	${bindir}/example4 --num-packets 0 --node-name g500_s100 --dcmac --master --add 0 --data-rate 100 --log-file "$baseapplog" --ms-start 0 --propSpeed 1500 -l debug & 
-	base=$!
 
 	echo "tx0"
 	tx0applog="$rawlogdir/bluerov2_s100.log"
@@ -338,11 +322,13 @@ then
 	tx3applog="$rawlogdir/bluerov2_f3_s100.log"
 	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed 1500 -l debug&
 	tx3=$!
-else
+
 	echo "base"
 	baseapplog="$rawlogdir/g500_s100.log"
-	${bindir}/example4 --num-packets 0 --node-name g500_s100 --dstadd 1 --data-rate 100 --log-file "$baseapplog" --ms-start 0 & 
+	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed 1500 -l debug & 
 	base=$!
+
+else
 
 	echo "tx0"
 	tx0applog="$rawlogdir/bluerov2_s100.log"
@@ -363,6 +349,12 @@ else
 	tx3applog="$rawlogdir/bluerov2_f3_s100.log"
 	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f3_s100 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 &
 	tx3=$!
+
+	echo "base"
+	baseapplog="$rawlogdir/g500_s100.log"
+	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --node-name g500_s100 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 & 
+	base=$!
+
 fi
 
 sleep ${testduration}s
@@ -373,9 +365,14 @@ kill -s INT $tx1 > /dev/null 2> /dev/null
 kill -s INT $tx2 > /dev/null 2> /dev/null
 kill -s INT $tx3 > /dev/null 2> /dev/null
 kill -s INT $base > /dev/null 2> /dev/null
+kill -s INT $rosrunproc > /dev/null 2> /dev/null
+kill -s INT $sim > /dev/null 2> /dev/null
+
+sleep 10s
+
+echo "SIGTERM programs..."
 kill -s TERM $rosrunproc > /dev/null 2> /dev/null
 kill -s TERM $sim > /dev/null 2> /dev/null
-
 
 sleep 10s
 
