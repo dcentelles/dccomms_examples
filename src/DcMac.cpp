@@ -253,7 +253,7 @@ CLASS_LOADER_REGISTER_CLASS(DcMacPacketBuilder, IPacketBuilder)
 /***************************/
 
 DcMac::DcMac() {
-  _maxQueueSize = 1024;
+  _maxQueueSize = UINT32_MAX;
   _txQueueSize = 0;
   _rxQueueSize = 0;
   _started = false;
