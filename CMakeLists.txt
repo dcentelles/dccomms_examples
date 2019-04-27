@@ -177,6 +177,18 @@ target_link_libraries(example5 ${DCCOMMS_UTILS_GIT} cxxopts)
 add_executable (router-2 ${SRCPATH}main/router-2.cpp)
 target_link_libraries(router-2 ${DCCOMMS_UTILS_GIT} cxxopts)
 
+add_executable (twinbot_leader ${SRCPATH}main/twinbot_leader.cpp)
+target_link_libraries(twinbot_leader ${DCCOMMS_UTILS_GIT} cxxopts ${PROJECT_NAME}_packets)
+
+add_executable (twinbot_follower ${SRCPATH}main/twinbot_follower.cpp)
+target_link_libraries(twinbot_follower ${DCCOMMS_UTILS_GIT} cxxopts ${PROJECT_NAME}_packets)
+
+add_executable (twinbot_support ${SRCPATH}main/twinbot_support.cpp)
+target_link_libraries(twinbot_support ${DCCOMMS_UTILS_GIT} cxxopts ${PROJECT_NAME}_packets)
+
+add_executable (twinbot_master ${SRCPATH}main/twinbot_master.cpp)
+target_link_libraries(twinbot_master ${DCCOMMS_UTILS_GIT} cxxopts ${PROJECT_NAME}_packets)
+
 add_executable (btp ${SRCPATH}main/btp.cpp)
 target_link_libraries(btp ${DCCOMMS_UTILS_GIT} cxxopts)
 
