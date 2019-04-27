@@ -46,7 +46,7 @@ do
 			echo "Current protocol: $proto"
 			protodir=$pktsizedir/$proto
 			mkdir -p $protodir
-			secs=$(echo "($npkts*$pktSize*8)/$rate + 60" | bc -l)
+			secs=$(echo "($npkts*$pktSize*8)/$rate + 120" | bc -l)
 			echo "sim time: $secs"
 			./mac_test.sh $rate $pktSize $npkts $secs $proto $protodir
 		done
