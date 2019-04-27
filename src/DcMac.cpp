@@ -485,52 +485,8 @@ void DcMac::SlaveRunTx() {
           Log->warn("MASTER DATA LOST");
         }
       }
-      if (!_sendingDataPacket) {
-        Log->debug("Check data in tx buffer");
-        _txUpperPkt = GetLastTxPacket();
-        if (_txUpperPkt) {
-          PopLastTxPacket();
-          Log->debug("Data in tx buffer. Seq: {}", _txUpperPkt->GetSeq());
-          _sendingDataPacketSize = _txUpperPkt->GetPacketSize();
-          _txDataPacket->SetDestAddr(_txUpperPkt->GetDestAddr());
-          _txDataPacket->SetSrcAddr(_addr);
-          _txDataPacket->SetPayload(_txUpperPkt->GetBuffer(),
-                                    _sendingDataPacketSize);
-          _txDataPacket->SetSeq(_txUpperPkt->GetSeq());
-          _txDataPacket->UpdateFCS();
-          _sendingDataPacket = true;
-          _waitingForAck = false;
-          Log->debug("Data packet for transmitting");
-        }
-      }
-
-      if (!_sendingDataPacket && !_replyAckPending)
-        continue;
 
       Log->debug("Start iteration for sending packet");
-
-      DcMacPacketPtr pkt(new DcMacPacket());
-      bool sendRtsOrAck = false, sendRts = false;
-
-      if (_replyAckPending) {
-        pkt->SetRtsDataSize(0);
-        pkt->SetSlaveAckMask(_lastDataReceivedFrom);
-        _lastDataReceivedFrom = 0;
-        sendRtsOrAck = true;
-      }
-
-      if (_sendingDataPacket && !_waitingForAck) {
-        auto dst = _txDataPacket->GetDestAddr();
-        pkt->SetDst(dst);
-        pkt->SetRtsDataSize(_sendingDataPacketSize);
-        sendRtsOrAck = true;
-        sendRts = true;
-      }
-
-      pkt->SetSrc(_addr);
-      pkt->SetType(DcMacPacket::rts);
-
-      pkt->UpdateFCS();
 
       auto rtsWakeUp = now + rtsSlotDelay;
       auto ctsWakeUp = now + ctsSlotDelay;
@@ -552,6 +508,49 @@ void DcMac::SlaveRunTx() {
           Log->warn("SLAVE DATA LOST 1");
         }
       }
+      DcMacPacketPtr pkt(new DcMacPacket());
+      bool sendRtsOrAck = false, sendRts = false;
+
+      if (_replyAckPending) {
+        pkt->SetRtsDataSize(0);
+        pkt->SetSlaveAckMask(_lastDataReceivedFrom);
+        _lastDataReceivedFrom = 0;
+        sendRtsOrAck = true;
+      }
+
+      if (_sendingDataPacket) {
+        if (!_waitingForAck) {
+          auto dst = _txDataPacket->GetDestAddr();
+          pkt->SetDst(dst);
+          pkt->SetRtsDataSize(_sendingDataPacketSize);
+          sendRtsOrAck = true;
+          sendRts = true;
+        }
+      } else {
+        Log->debug("Check data in tx buffer");
+        _txUpperPkt = GetLastTxPacket();
+        if (_txUpperPkt) {
+          PopLastTxPacket();
+          Log->debug("Data in tx buffer. Seq: {}", _txUpperPkt->GetSeq());
+          _sendingDataPacketSize = _txUpperPkt->GetPacketSize();
+          _txDataPacket->SetDestAddr(_txUpperPkt->GetDestAddr());
+          _txDataPacket->SetSrcAddr(_addr);
+          _txDataPacket->SetPayload(_txUpperPkt->GetBuffer(),
+                                    _sendingDataPacketSize);
+          _txDataPacket->SetSeq(_txUpperPkt->GetSeq());
+          _txDataPacket->UpdateFCS();
+          _sendingDataPacket = true;
+          _waitingForAck = false;
+          Log->debug("Data packet for transmitting");
+          sendRtsOrAck = true;
+          sendRts = true;
+        }
+      }
+
+      pkt->SetSrc(_addr);
+      pkt->SetType(DcMacPacket::rts);
+
+      pkt->UpdateFCS();
 
       if (waitres == cv_status::no_timeout) {
         Log->debug("Sleep until RTS slot");
@@ -590,7 +589,7 @@ void DcMac::SlaveRunTx() {
       }
 
       if (!_sendingDataPacket) {
-        Log->debug("No data to send");
+        Log->debug("No data to send in this cycle");
         continue;
       } else {
         Log->debug("DATA to send");
@@ -878,7 +877,8 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
   case DcMacPacket::data: {
     _status = datareceived;
     if (dst == _addr) {
-      Log->debug("DATA received from {} (Seq: {})", pkt->GetSrc(), pkt->GetSeq());
+      Log->debug("DATA received from {} (Seq: {})", pkt->GetSrc(),
+                 pkt->GetSeq());
       auto npkt = _highPb->Create();
       uint8_t *payload = pkt->GetPayloadBuffer();
       npkt->DoCopyFromRawBuffer(payload);
@@ -886,7 +886,8 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
       npkt->SetVirtualDestAddr(pkt->GetDestAddr());
       npkt->SetVirtualSrcAddr(pkt->GetSrcAddr());
       if (!npkt->PacketIsOk()) {
-        Log->critical("Data packet corrupted from {} (Seq: {})", npkt->GetSrcAddr(), npkt->GetSeq());
+        Log->critical("Data packet corrupted from {} (Seq: {})",
+                      npkt->GetSrcAddr(), npkt->GetSeq());
       }
       auto src = pkt->GetSrc();
       _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src)));
@@ -935,7 +936,8 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
   case DcMacPacket::data: {
     _status = datareceived;
     if (dst == _addr) {
-      Log->debug("DATA received from {} (Seq: {})", pkt->GetSrc(), pkt->GetSeq());
+      Log->debug("DATA received from {} (Seq: {})", pkt->GetSrc(),
+                 pkt->GetSeq());
       auto npkt = _highPb->Create();
       uint8_t *payload = pkt->GetPayloadBuffer();
       npkt->DoCopyFromRawBuffer(payload);
@@ -943,7 +945,8 @@ void DcMac::SlaveProcessRxPacket(const DcMacPacketPtr &pkt) {
       npkt->SetVirtualDestAddr(pkt->GetDestAddr());
       npkt->SetVirtualSrcAddr(pkt->GetSrcAddr());
       if (!npkt->PacketIsOk()) {
-        Log->critical("Data packet corrupted from {} (Seq: {})", npkt->GetSrcAddr(), npkt->GetSeq());
+        Log->critical("Data packet corrupted from {} (Seq: {})",
+                      npkt->GetSrcAddr(), npkt->GetSeq());
       }
       auto src = pkt->GetSrc();
       _lastDataReceivedFrom = (_lastDataReceivedFrom | (1 << (src)));
