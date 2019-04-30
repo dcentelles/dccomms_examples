@@ -28,7 +28,6 @@ mkdir -p $resultsdir
 mkdir -p $rawlogdir
 
 echo $* > $resultsdir/notes.txt
-echo "Data rate: $datarate" | tee -a $resultsdir/notes
 echo "control pkt size: $controlSize" | tee -a $resultsdir/notes
 echo "image pkt size: $imgSize" | tee -a $resultsdir/notes
 echo "npkts: $npkts" | tee -a $resultsdir/notes
@@ -466,7 +465,6 @@ cd $basedir
 echo "Moving remaining log files..."
 sleep 4s
 
-echo "Data rate: $datarate" | tee -a $resultsdir/notes
 echo "control pkt size: $controlSize"
 echo "image pkt size: $imgSize"
 echo "npkts: $npkts"
