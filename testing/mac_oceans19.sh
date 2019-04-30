@@ -240,33 +240,21 @@ kill -9 $sim > /dev/null 2> /dev/null
 
 sleep 5s
 
+localscenesdir=./scenes/
 scenesdir=$(rospack find uwsim)/data/scenes
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
-if [ "$protocol" == "dcmac" ]
-then
-	tmplscene=$scenesdir/netsim_oceans19.xml
-	scene=$scenesdir/$protocol.xml
-	cp $tmplscene $scene
-else
-	tmplscene=$scenesdir/netsim_oceans19.xml
-	scene=$scenesdir/$protocol.xml
-	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
-fi
+tmplscene=$localscenesdir/netsim_oceans19.xml
+scene=$scenesdir/$protocol.xml
+sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
 
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
 cat $scene
 
-if [ "$protocol" == "dcmac" ]
-then
-	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
-else
-	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
-fi
-
+NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 
 sleep 5s
 rosrunproc=$!
@@ -303,65 +291,35 @@ echo $rosrunproc > rosrunpid
 echo $sim > simpid
 sleep 40s
 
-mnpkts=0
-mpktsize=20
-mdatarate=0
 maxRange=100
 
-if [ "$protocol" == "dcmac" ]
-then
-	colScript=$colScriptDcMac
-	txRaw=$txRawDcMac
+colScript=$colScriptDcMac
+txRaw=$txRawDcMac
 
-	echo "leader"
-	leaderapplog="$rawlogdir/leader.log"
-	${bindir}/twinbot_leader --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader --dcmac --add 2 --maxnodes 3 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	leader=$!
-	
-	echo "follower"
-	followerapplog="$rawlogdir/follower.log"
-	${bindir}/twinbot_follower --tx-packet-size $controlSize --num-packets $npkts --node-name comms_follower --dcmac --add 1 --maxnodes 3 --maxRange $maxRange --data-rate $controlDatarate --log-file "$followerapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	follower=$!
-	
-	echo "support"
-	supportapplog="$rawlogdir/support.log"
-	${bindir}/twinbot_support --tx-packet-size $imgSize --num-packets $npkts --node-name comms_support --dcmac --add 3 --maxnodes 3 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	support=$!
-	
-	echo "master"
-	masterapplog="$rawlogdir/master.log"
-	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $npkts --node-name comms_master --dcmac --master --add 0 --maxnodes 3 --maxRange $maxRange --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed 1500 -l debug & 
-	master=$!
+echo "leader"
+leaderapplog="$rawlogdir/leader.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader --add 5 --dstadd 4 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed 1500 -l debug&
+leader=$!
 
-else
-	colScript=$colScriptDcMac
-	txRaw=$txRawDcMac
+echo "follower"
+followerapplog="$rawlogdir/follower.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $npkts --node-name comms_follower --add 4 --dstadd 5 --maxRange $maxRange --data-rate $controlDatarate --log-file "$followerapplog" --ms-start 10000 --propSpeed 1500 -l debug&
+follower=$!
 
-	echo "leader"
-	leaderapplog="$rawlogdir/leader.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader --add 5 --dstadd 4 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	leader=$!
-	
-	echo "follower"
-	followerapplog="$rawlogdir/follower.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $npkts --node-name comms_follower --add 4 --dstadd 5 --maxRange $maxRange --data-rate $controlDatarate --log-file "$followerapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	follower=$!
-	
-	echo "support"
-	supportapplog="$rawlogdir/support.log"
-	${bindir}/example4 --tx-packet-size $imgSize --num-packets $npkts --node-name comms_support --add 3 --dstadd 0 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	support=$!
+echo "support"
+supportapplog="$rawlogdir/support.log"
+${bindir}/example4 --tx-packet-size $imgSize --num-packets $npkts --node-name comms_support --add 3 --dstadd 0 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed 1500 -l debug&
+support=$!
 
-	echo "leader_ac"
-	leaderapplog_ac="$rawlogdir/leader_ac.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader_ac --add 2 --dstadd 0 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog_ac" --ms-start 10000 --propSpeed 1500 -l debug&
-	leader_ac=$!
-	
-	echo "master"
-	masterapplog="$rawlogdir/master.log"
-	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $npkts --node-name comms_master --add 0 --maxRange $maxRange --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed 1500 -l debug & 
-	master=$!
-fi
+echo "leader_ac"
+leaderapplog_ac="$rawlogdir/leader_ac.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader_ac --add 2 --dstadd 0 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog_ac" --ms-start 10000 --propSpeed 1500 -l debug&
+leader_ac=$!
+
+echo "master"
+masterapplog="$rawlogdir/master.log"
+${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $npkts --node-name comms_master --add 0 --maxRange $maxRange --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed 1500 -l debug & 
+master=$!
 
 sleep ${testduration}s
 

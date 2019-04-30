@@ -240,17 +240,18 @@ kill -9 $sim > /dev/null 2> /dev/null
 
 sleep 5s
 
+localscenesdir=./scenes/
 scenesdir=$(rospack find uwsim)/data/scenes
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
 if [ "$protocol" == "dcmac" ]
 then
-	tmplscene=$scenesdir/netsim_twinbot_dcmac.xml
+	tmplscene=$localscenesdir/netsim_twinbot_dcmac.xml
 	scene=$scenesdir/$protocol.xml
 	cp $tmplscene $scene
 else
-	tmplscene=$scenesdir/netsim_twinbot_mac.xml
+	tmplscene=$localscenesdir/netsim_twinbot_mac.xml
 	scene=$scenesdir/$protocol.xml
 	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
 fi

@@ -1,6 +1,0 @@
-./example4 --dstadd 0 --add 0 --num-packets 0 --dcmac --maxnodes 4 --master --node-name "g500_s100" --propSpeed 1500 
-./example4 --dstadd 3 --add 4 --num-packets 100 --dcmac --maxnodes 4 --node-name "bluerov2_f3_s100" --data-rate 200 --tx-packet-size 20 --propSpeed 1500
-./example4 --dstadd 0 --add 3 --num-packets 100 --dcmac --maxnodes 4 --node-name "bluerov2_f2_s100" --data-rate 50 --tx-packet-size 20 --propSpeed 1500
-./example4 --dstadd 1 --add 2 --num-packets 100 --dcmac --maxnodes 4 --node-name "bluerov2_f_s100" --data-rate 20 --tx-packet-size 20 --propSpeed 1500
-./example4 --dstadd 2 --add 1 --num-packets 100 --dcmac --maxnodes 4 --node-name "bluerov2_s100" --data-rate 300 --tx-packet-size 200 --propSpeed 1500
-
