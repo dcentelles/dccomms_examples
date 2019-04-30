@@ -533,7 +533,8 @@ void DcMac::SlaveRunTx() {
           PopLastTxPacket();
           Log->debug("Data in tx buffer. Seq: {}", _txUpperPkt->GetSeq());
           _sendingDataPacketSize = _txUpperPkt->GetPacketSize();
-          _txDataPacket->SetDestAddr(_txUpperPkt->GetDestAddr());
+          auto dst = _txUpperPkt->GetDestAddr();
+          _txDataPacket->SetDestAddr(dst);
           _txDataPacket->SetSrcAddr(_addr);
           _txDataPacket->SetPayload(_txUpperPkt->GetBuffer(),
                                     _sendingDataPacketSize);
@@ -542,6 +543,9 @@ void DcMac::SlaveRunTx() {
           _sendingDataPacket = true;
           _waitingForAck = false;
           Log->debug("Data packet for transmitting");
+
+          pkt->SetDst(dst);
+          pkt->SetRtsDataSize(_sendingDataPacketSize);
           sendRtsOrAck = true;
           sendRts = true;
         }
@@ -786,7 +790,6 @@ void DcMac::MasterRunTx() {
           _txDataPacket->SetSeq(_txUpperPkt->GetSeq());
           _txDataPacket->UpdateFCS();
           _sendingDataPacket = true;
-          _waitingForAck = false;
           Log->debug("Data packet for transmitting");
         }
       } else {
@@ -794,7 +797,6 @@ void DcMac::MasterRunTx() {
           _stream << _txDataPacket;
           Log->debug("SEND DATA. Seq {} ; Size {}", _txDataPacket->GetSeq(),
                      _sendingDataPacketSize);
-          _waitingForAck = true;
           double tt = GetPktTransmissionMillis(_txDataPacket->GetPacketSize());
           this_thread::sleep_for(
               milliseconds(static_cast<int>(std::round(tt))));
@@ -835,6 +837,7 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
   std::unique_lock<std::mutex> lock(_status_mutex);
   DcMacPacket::Type type = pkt->GetType();
   auto dst = pkt->GetDst();
+  auto src = pkt->GetSrc();
 
   switch (type) {
   case DcMacPacket::sync: {
@@ -842,21 +845,17 @@ void DcMac::MasterProcessRxPacket(const DcMacPacketPtr &pkt) {
     break;
   }
   case DcMacPacket::cts: {
-    Log->warn("CTS detected from {}", pkt->GetSrc());
+    Log->warn("CTS detected from {}", src);
     break;
   }
   case DcMacPacket::rts: {
     if (pkt->GetSlaveAckMask()) {
       if (pkt->GetSlaveAck(_addr)) {
-        Log->debug("ACK received from {}", pkt->GetSrc());
+        Log->debug("ACK received from {}", src);
         _sendingDataPacket = false;
       } else {
-        Log->debug("ACK detected from {}", pkt->GetSrc());
-        if (_waitingForAck) {
-          Log->warn("DATA LOST");
-        }
+        Log->debug("ACK detected from {}", src);
       }
-      _waitingForAck = false;
     }
     _rtsDataSize = pkt->GetRtsDataSize();
     if (_rtsDataSize > 0) {

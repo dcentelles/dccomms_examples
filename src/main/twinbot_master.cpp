@@ -311,7 +311,7 @@ int main(int argc, char **argv) {
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
       txPacket->SetSeq(npacket);
 
-      txPacket->SetDestAddr(1); // LEADER
+      txPacket->SetDestAddr(2); // LEADER
       txPacket->PayloadUpdated(payloadSize);
       log->Info("TX TO {} SEQ {} SIZE {}", txPacket->GetDestAddr(), npacket,
                 txPacket->GetPacketSize());

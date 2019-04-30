@@ -213,6 +213,7 @@ private:
   uint32_t _sendingDataPacketSize;
   bool _replyAckPending;
   bool _waitingForAck;
+  uint32_t _waitingForAckFrom;
   DcMacAckField _lastDataReceivedFrom;
 };
 
