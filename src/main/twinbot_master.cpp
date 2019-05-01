@@ -306,9 +306,10 @@ int main(int argc, char **argv) {
   tx = std::thread([totalPacketSize, node, seqPtr, dstPtr, dstadd, txPacket,
                     log, nPackets, txPacketSize, nanosPerByte, msStart, msgSize,
                     payloadSize]() {
+
+    uint64_t nanos = round(totalPacketSize * nanosPerByte);
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
-      uint64_t nanos = round(totalPacketSize * nanosPerByte);
       txPacket->SetSeq(npacket);
 
       txPacket->SetDestAddr(2); // LEADER
