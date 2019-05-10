@@ -15,9 +15,11 @@ protocol=$7
 
 acMaxRange=100
 rfMaxRange=15
+controlDatarate2=$(echo "$controlDatarate*2" | bc)
 
 imgDuration=$(echo "$imgNumPkts * $imgSize*8 / $imgDatarate" | bc -l)
 controlNumPkts=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate)" | bc)
+controlNumPkts2=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate2)" | bc)
 testduration=$(echo "$imgDuration + 60" | bc -l)
 
 basedir=$(realpath ${basedir}/)
@@ -37,8 +39,10 @@ echo "control pkt size: $controlSize" | tee -a $resultsdir/notes
 echo "image pkt size: $imgSize" | tee -a $resultsdir/notes
 echo "num. image pkts: $imgNumPkts" | tee -a $resultsdir/notes
 echo "num. control pkts: $controlNumPkts" | tee -a $resultsdir/notes
+echo "num. control pkts 2: $controlNumPkts2" | tee -a $resultsdir/notes
 echo "test duration: $testduration" | tee -a $resultsdir/notes
 echo "control datarate: $controlDatarate" | tee -a $resultsdir/notes
+echo "control datarate2: $controlDatarate2" | tee -a $resultsdir/notes
 echo "img datarate: $imgDatarate" | tee -a $resultsdir/notes
 
 
@@ -305,12 +309,12 @@ txRaw=$txRawDcMac
 
 echo "leader"
 leaderapplog="$rawlogdir/leader.log"
-${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_leader --add 5 --dstadd 4 --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 -l debug&
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --add 5 --dstadd 4 --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 -l debug&
 leader=$!
 
 echo "follower"
 followerapplog="$rawlogdir/follower.log"
-${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_follower --add 4 --dstadd 5 --data-rate $controlDatarate --log-file "$followerapplog" --ms-start 10000 -l debug&
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add 4 --dstadd 5 --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 -l debug&
 follower=$!
 
 echo "support"
