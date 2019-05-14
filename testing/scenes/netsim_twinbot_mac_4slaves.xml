@@ -84,8 +84,7 @@
   -->
   <CustomCommsChannel>
     <id>0</id>
-     <!--<propTimeIncPerMeter>3.333333333e-06</propTimeIncPerMeter>-->
-     <propTimeIncPerMeter>0.666</propTimeIncPerMeter>
+     <propTimeIncPerMeter>propSpeedValue</propTimeIncPerMeter>
     <minPropTime>0</minPropTime>
     <logLevel>info</logLevel>
   </CustomCommsChannel>

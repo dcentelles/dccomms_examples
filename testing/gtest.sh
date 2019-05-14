@@ -16,6 +16,7 @@ npkts=$2
 protos=$3
 sizes=$4
 datarates=$5
+propSpeed=$6
 
 if [ ! -d $rbasedir ]
 then
@@ -48,7 +49,7 @@ do
 			mkdir -p $protodir
 			secs=$(echo "($npkts*$pktSize*8)/$rate + 120" | bc -l)
 			echo "sim time: $secs"
-			./mac_performance.sh $rate $pktSize $npkts $secs $proto $protodir
+			./mac_performance.sh $rate $pktSize $npkts $secs $proto $propSpeed $protodir
 		done
 	done
 done

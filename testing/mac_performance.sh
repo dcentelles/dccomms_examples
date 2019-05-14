@@ -10,14 +10,25 @@ size=$2
 npkts=$3
 testduration=$4
 protocol=$5
+propSpeed=$6
+echo "prop speed arg: $propSpeed"
+if [ "$propSpeed" == "ac" ]
+then
+	propSpeed=1500
+	uwsimPropSpeed="0.666"
+else
+	propSpeed=300000000
+	uwsimPropSpeed="3.333333333e-06"
+fi
 
 echo "Data rate: $datarate"
 echo "Pkt size: $size"
 echo "npkts: $npkts"
 echo "testduration: $testduration"
 echo "protocol: $protocol"
+echo "prop speed: $propSpeed"
 
-basedir=$(realpath ${6}/)
+basedir=$(realpath ${7}/)
 echo "BASEDIR: $basedir"
 bindir="../build/" #TODO: as argument
 resultsdir=$basedir/results
@@ -28,7 +39,6 @@ rm -rf /dev/mqueue/*
 
 mkdir -p $resultsdir
 mkdir -p $rawlogdir
-
 
 
 kill -9 $(ps aux | grep "bash .*$scriptName" | awk -v mpid=$pid '{ if(mpid != $2) print $2}') > /dev/null 2>&1
@@ -250,6 +260,12 @@ fi
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
+gitrev=$(git rev-parse --short HEAD)
+library=../build/libdccomms_examples_${gitrev}_packets.so
+
+sed -i "s/packetslib/${library}/g" $scene
+sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
+
 cat $scene
 
 if [ "$protocol" == "dcmac" ]
@@ -306,27 +322,27 @@ then
 
 	echo "tx0"
 	tx0applog="$rawlogdir/bluerov2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 10000 --propSpeed 1500 -l debug&
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 10000 --propSpeed $propSpeed -l debug&
 	tx0=$!
 
 	echo "tx1"
 	tx1applog="$rawlogdir/bluerov2_f_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 10000 --propSpeed 1500 -l debug&
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 10000 --propSpeed $propSpeed -l debug&
 	tx1=$!
 
 	echo "tx2"
 	tx2applog="$rawlogdir/bluerov2_f2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 10000 --propSpeed 1500 -l debug &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 10000 --propSpeed $propSpeed -l debug &
 	tx2=$!
 
 	echo "tx3"
 	tx3applog="$rawlogdir/bluerov2_f3_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed 1500 -l debug&
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed $propSpeed -l debug&
 	tx3=$!
 
 	echo "base"
 	baseapplog="$rawlogdir/g500_s100.log"
-	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed 1500 -l debug & 
+	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed $propSpeed -l debug & 
 	base=$!
 
 else
