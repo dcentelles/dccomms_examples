@@ -267,7 +267,7 @@ sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToF
 
 cat $scene
 
-NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+#NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 
 sleep 5s
 rosrunproc=$!
@@ -310,26 +310,32 @@ txRaw=$txRawDcMac
 echo "leader"
 leaderapplog="$rawlogdir/leader.log"
 ${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --add 5 --dstadd 4 --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 -l debug&
+#${bindir}/example4 --tx-packet-size $controlSize --num-packets 0 --node-name comms_leader --add 5 --dstadd 4 --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 -l debug&
 leader=$!
 
 echo "follower"
 followerapplog="$rawlogdir/follower.log"
 ${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add 4 --dstadd 5 --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 -l debug&
+#${bindir}/example4 --tx-packet-size $controlSize --num-packets 0 --node-name comms_follower --add 4 --dstadd 5 --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 -l debug&
 follower=$!
 
 echo "support"
 supportapplog="$rawlogdir/support.log"
 ${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_support --add 3 --dstadd 0 --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 -l debug&
+#${bindir}/example4 --tx-packet-size $imgSize --num-packets 0 --node-name comms_support --add 3 --dstadd 0 --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 -l debug&
 support=$!
 
 echo "leader_ac"
 leaderapplog_ac="$rawlogdir/leader_ac.log"
 ${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_leader_ac --add 2 --dstadd 0 --data-rate $controlDatarate --log-file "$leaderapplog_ac" --ms-start 10000 -l debug&
+#${bindir}/example4 --tx-packet-size $controlSize --num-packets 1 --node-name comms_leader_ac --add 2 --dstadd 0 --data-rate $controlDatarate --log-file "$leaderapplog_ac" --ms-start 10000 -l debug&
 leader_ac=$!
 
 echo "master"
 masterapplog="$rawlogdir/master.log"
 ${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_master --add 0  --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 10000 -l debug & 
+#${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets 1 --node-name comms_master --add 0  --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 10000 -l debug & 
+#${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_master --add 0 --dstadd 2 --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 10000 -l debug & 
 master=$!
 
 sleep ${testduration}s
@@ -340,13 +346,13 @@ kill -s INT $leader_ac > /dev/null 2> /dev/null
 kill -s INT $follower > /dev/null 2> /dev/null
 kill -s INT $support > /dev/null 2> /dev/null
 kill -s INT $master > /dev/null 2> /dev/null
-kill -s INT $rosrunproc > /dev/null 2> /dev/null
+#kill -s INT $rosrunproc > /dev/null 2> /dev/null
 kill -s INT $sim > /dev/null 2> /dev/null
 
 sleep 10s
 
 echo "SIGTERM programs..."
-kill -s TERM $rosrunproc > /dev/null 2> /dev/null
+#kill -s TERM $rosrunproc > /dev/null 2> /dev/null
 kill -s TERM $sim > /dev/null 2> /dev/null
 
 sleep 10s
@@ -358,7 +364,7 @@ kill -9 $leader_ac > /dev/null 2> /dev/null
 kill -9 $follower > /dev/null 2> /dev/null
 kill -9 $support > /dev/null 2> /dev/null
 kill -9 $master > /dev/null 2> /dev/null
-kill -9 $rosrunproc > /dev/null 2> /dev/null
+#kill -9 $rosrunproc > /dev/null 2> /dev/null
 kill -9 $sim > /dev/null 2> /dev/null
 
 sleep 5s
