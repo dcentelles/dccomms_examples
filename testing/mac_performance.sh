@@ -251,6 +251,13 @@ then
 	tmplscene=$localscenesdir/netsim_twinbot_dcmac_4slaves.xml
 	scene=$scenesdir/$protocol.xml
 	cp $tmplscene $scene
+	gitrev=$(git rev-parse --short HEAD)
+	library=../build/libdccomms_examples_${gitrev}_packets.so
+	library=$(realpath ${library}/)
+	library=$(echo "$library" | sed 's/\//\\\//g')
+	echo $library
+	sleep 5
+	sed -i "s/packetslib/${library}/g" $scene
 else
 	tmplscene=$localscenesdir/netsim_twinbot_mac_4slaves.xml
 	scene=$scenesdir/$protocol.xml
@@ -260,10 +267,6 @@ fi
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
-gitrev=$(git rev-parse --short HEAD)
-library=../build/libdccomms_examples_${gitrev}_packets.so
-
-sed -i "s/packetslib/${library}/g" $scene
 sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
 
 cat $scene
