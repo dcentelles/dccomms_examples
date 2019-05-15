@@ -253,7 +253,7 @@ then
 	cp $tmplscene $scene
 	gitrev=$(git rev-parse --short HEAD)
 	library=../build/libdccomms_examples_${gitrev}_packets.so
-	library=$(realpath ${library}/)
+	library=$(realpath ${library})
 	library=$(echo "$library" | sed 's/\//\\\//g')
 	echo $library
 	sleep 5
