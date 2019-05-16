@@ -187,7 +187,7 @@
         </scaleFactor>
       </mesh>
       <!--<intrinsicDelay>85.282906</intrinsicDelay>-->
-      <intrinsicDelay>0</intrinsicDelay>
+      <intrinsicDelay>1</intrinsicDelay>
       <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
@@ -274,7 +274,7 @@
         </scaleFactor>
       </mesh>
       <!--<intrinsicDelay>85.282906</intrinsicDelay>-->
-      <intrinsicDelay>0</intrinsicDelay>
+      <intrinsicDelay>1</intrinsicDelay>
       <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
@@ -359,7 +359,7 @@
         </scaleFactor>
       </mesh>
       <!--<intrinsicDelay>85.282906</intrinsicDelay>-->
-      <intrinsicDelay>0</intrinsicDelay>
+      <intrinsicDelay>1</intrinsicDelay>
       <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
@@ -445,7 +445,7 @@
         </scaleFactor>
       </mesh>
       <!--<intrinsicDelay>85.282906</intrinsicDelay>-->
-      <intrinsicDelay>0</intrinsicDelay>
+      <intrinsicDelay>1</intrinsicDelay>
       <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
@@ -530,7 +530,7 @@
         </scaleFactor>
       </mesh>
       <!--<intrinsicDelay>85.282906</intrinsicDelay>-->
-      <intrinsicDelay>0</intrinsicDelay>
+      <intrinsicDelay>1</intrinsicDelay>
       <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
