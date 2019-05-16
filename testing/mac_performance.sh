@@ -29,13 +29,21 @@ echo "protocol: $protocol"
 echo "prop speed: $propSpeed"
 
 basedir=$(realpath ${7}/)
+debug=$8
+
 echo "BASEDIR: $basedir"
 bindir="../build/" #TODO: as argument
 resultsdir=$basedir/results
 rawlogdir=$basedir/rawlog
 
 rm -rf $resultsdir $rawlogdir
-rm -rf /dev/mqueue/*
+if [ "$debug" == "debug" ]
+then
+	echo "debug"
+else
+	echo "no debug"
+	rm -rf /dev/mqueue/*
+fi
 
 mkdir -p $resultsdir
 mkdir -p $rawlogdir
@@ -269,18 +277,29 @@ sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToF
 
 sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
 
-cat $scene
 
-if [ "$protocol" == "dcmac" ]
+if [ "$debug" == "debug" ]
 then
-	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	echo "debug"
 else
-	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	echo "no debug"
+	if [ "$debug" == "logdebug" ]
+	then
+		sed -i "s/>info</>debug</g" $scene
+	fi
+	cat $scene
+	if [ "$protocol" == "dcmac" ]
+	then
+		rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	else
+		NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	fi
+
+
+	sleep 5s
+	rosrunproc=$!
 fi
 
-
-sleep 5s
-rosrunproc=$!
 sim=$(ps aux | grep "uwsim_binary" | awk -v mpid=$pid '
 BEGIN{\
  	found=0; 
