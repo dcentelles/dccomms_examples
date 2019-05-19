@@ -5,15 +5,34 @@ scriptPath=$(realpath $0)
 echo $scriptName
 pid=$$
 
-npkts=$1
-protocol=$2
-imgSize=$3
-imgDatarate=$4
-controlDatarate=$5
-testduration=$6
-basedir=$7
+imgSize=$1
+controlSize=$2
+imgDatarate=$3
+controlDatarate=$4
+basedir=$(realpath ${5}/)
+imgNumPkts=$6
+protocol=$7
+propSpeed=$8
+devDelay=2
 
-controlSize=20
+echo "prop speed arg: $propSpeed"
+if [ "$propSpeed" == "ac" ]
+then
+	propSpeed=1500
+	uwsimPropSpeed="0.666"
+	maxRange=100
+else
+	propSpeed=300000000
+	uwsimPropSpeed="3.333333333e-06"
+	maxRange=100
+fi
+
+controlDatarate2=$(echo "$controlDatarate*2" | bc)
+
+imgDuration=$(echo "$imgNumPkts * $imgSize*8 / $imgDatarate" | bc -l)
+controlNumPkts=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate)" | bc)
+controlNumPkts2=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate2)" | bc)
+testduration=$(echo "$imgDuration + 120" | bc -l)
 
 basedir=$(realpath ${basedir}/)
 echo "BASEDIR: $basedir"
@@ -28,20 +47,20 @@ mkdir -p $resultsdir
 mkdir -p $rawlogdir
 
 echo $* > $resultsdir/notes.txt
-echo "Data rate: $datarate" | tee -a $resultsdir/notes
 echo "control pkt size: $controlSize" | tee -a $resultsdir/notes
 echo "image pkt size: $imgSize" | tee -a $resultsdir/notes
-echo "npkts: $npkts" | tee -a $resultsdir/notes
-echo "testduration: $testduration" | tee -a $resultsdir/notes
+echo "num. image pkts: $imgNumPkts" | tee -a $resultsdir/notes
+echo "num. control pkts: $controlNumPkts" | tee -a $resultsdir/notes
+echo "num. control pkts 2: $controlNumPkts2" | tee -a $resultsdir/notes
+echo "test duration: $testduration" | tee -a $resultsdir/notes
 echo "control datarate: $controlDatarate" | tee -a $resultsdir/notes
+echo "control datarate2: $controlDatarate2" | tee -a $resultsdir/notes
 echo "img datarate: $imgDatarate" | tee -a $resultsdir/notes
 echo "protocol: $protocol" | tee -a $resultsdir/notes
 
-
-
-
 kill -9 $(ps aux | grep "bash .*$scriptName" | awk -v mpid=$pid '{ if(mpid != $2) print $2}') > /dev/null 2>&1
 
+sleep 1s
 ###################################################
 ###################################################
 
@@ -248,8 +267,14 @@ uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 if [ "$protocol" == "dcmac" ]
 then
 	tmplscene=$localscenesdir/netsim_twinbot_dcmac.xml
-	scene=$scenesdir/$protocol.xml
+	scene=$scenesdir/twinbot_dcmac.xml
 	cp $tmplscene $scene
+	gitrev=$(git rev-parse --short HEAD)
+	library=../build/libdccomms_examples_${gitrev}_packets.so
+	library=$(realpath ${library})
+	library=$(echo "$library" | sed 's/\//\\\//g')
+	echo $library
+	sed -i "s/packetslib/${library}/g" $scene
 else
 	tmplscene=$localscenesdir/netsim_twinbot_mac.xml
 	scene=$scenesdir/$protocol.xml
@@ -259,17 +284,18 @@ fi
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
+sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
+
 cat $scene
 
 if [ "$protocol" == "dcmac" ]
 then
 	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 else
-	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	echo "Set env."
+#	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 fi
 
-
-sleep 5s
 rosrunproc=$!
 sim=$(ps aux | grep "uwsim_binary" | awk -v mpid=$pid '
 BEGIN{\
@@ -302,12 +328,7 @@ echo "ROSRUN: $rosrunproc ; SIM: $sim"
 
 echo $rosrunproc > rosrunpid
 echo $sim > simpid
-sleep 40s
-
-mnpkts=0
-mpktsize=20
-mdatarate=0
-maxRange=100
+sleep 45s
 
 if [ "$protocol" == "dcmac" ]
 then
@@ -316,47 +337,30 @@ then
 
 	echo "leader"
 	leaderapplog="$rawlogdir/leader.log"
-	${bindir}/twinbot_leader --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader --dcmac --add 2 --maxnodes 3 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed 1500 -l debug&
+	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --dcmac --add 1 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	#${bindir}/example4 --tx-packet-size $controlSize --num-packets 1 --node-name comms_leader --dcmac --add 2 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
 	leader=$!
-	
-	echo "follower"
-	followerapplog="$rawlogdir/follower.log"
-	${bindir}/twinbot_follower --tx-packet-size $controlSize --num-packets $npkts --node-name comms_follower --dcmac --add 1 --maxnodes 3 --maxRange $maxRange --data-rate $controlDatarate --log-file "$followerapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	follower=$!
 	
 	echo "support"
 	supportapplog="$rawlogdir/support.log"
-	${bindir}/twinbot_support --tx-packet-size $imgSize --num-packets $npkts --node-name comms_support --dcmac --add 3 --maxnodes 3 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed 1500 -l debug&
+	${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_support --dcmac --add 2 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	#${bindir}/example4 --tx-packet-size $imgSize --num-packets 1 --node-name comms_support --dcmac --add 3 --maxnodes 2 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
 	support=$!
 	
 	echo "master"
 	masterapplog="$rawlogdir/master.log"
-	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $npkts --node-name comms_master --dcmac --master --add 0 --maxnodes 3 --maxRange $maxRange --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed 1500 -l debug & 
+	#${bindir}/twinbot_master --tx-packet-size 20 --num-packets 100 --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange 100 --data-rate 80 --log-file "$masterapplog" --ms-start 5000 --propSpeed 1500 --devDelay 2 -l debug 
+	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$masterapplog" --ms-start 0 --propSpeed $propSpeed --devDelay 2 -l debug & 
+	#${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets 1 --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed $propSpeed --devDelay 2 -l debug & 
 	master=$!
 
 else
 	colScript=$colScriptDcMac
 	txRaw=$txRawDcMac
 
-	echo "leader"
-	leaderapplog="$rawlogdir/leader.log"
-	${bindir}/twinbot_leader --tx-packet-size $controlSize --num-packets $npkts --node-name comms_leader --add 1 --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	leader=$!
-	
-	echo "follower"
-	followerapplog="$rawlogdir/follower.log"
-	${bindir}/twinbot_follower --tx-packet-size $controlSize --num-packets $npkts --node-name comms_follower --add 2 --data-rate $controlDatarate --log-file "$followerapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	follower=$!
-	
-	echo "support"
-	supportapplog="$rawlogdir/support.log"
-	${bindir}/twinbot_support --tx-packet-size $imgSize --num-packets $npkts --node-name comms_support --add 3 --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed 1500 -l debug&
-	support=$!
-	
-	echo "master"
-	masterapplog="$rawlogdir/master.log"
-	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $npkts --node-name comms_master --add 0 --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed 1500 -l debug & 
-	master=$!
+	#TODO: ...
+	echo "NOT IMPLEMENTED"
+	exit 1
 fi
 
 sleep ${testduration}s
@@ -369,13 +373,13 @@ kill -s INT $master > /dev/null 2> /dev/null
 kill -s INT $rosrunproc > /dev/null 2> /dev/null
 kill -s INT $sim > /dev/null 2> /dev/null
 
-sleep 10s
+sleep 5s
 
 echo "SIGTERM programs..."
 kill -s TERM $rosrunproc > /dev/null 2> /dev/null
 kill -s TERM $sim > /dev/null 2> /dev/null
 
-sleep 10s
+sleep 5s
 
 echo "kill -9 programs..."
 kill -9 $(ps aux | grep "bash .*$scriptName" | awk -v mpid=$pid '{ if(mpid != $2) print $2}') > /dev/null 2>&1
@@ -386,9 +390,10 @@ kill -9 $master > /dev/null 2> /dev/null
 kill -9 $rosrunproc > /dev/null 2> /dev/null
 kill -9 $sim > /dev/null 2> /dev/null
 
-sleep 5s
+sleep 10s
 
-for pair in $leaderapplog:$masterapplog:2:0 $leaderapplog:$followerapplog:2:1 $followerapplog:$leaderapplog:1:2 $supportapplog:$masterapplog:3:0 $masterapplog:$leaderapplog:0:2 $masterapplog:$supportapplog:0:3
+#for pair in $leaderapplog:$masterapplog:2:0 $leaderapplog:$followerapplog:2:1 $followerapplog:$leaderapplog:1:2 $supportapplog:$masterapplog:3:0 $masterapplog:$leaderapplog:0:2 $masterapplog:$supportapplog:0:3
+for pair in $leaderapplog:$masterapplog:1:0 $supportapplog:$masterapplog:2:0 $masterapplog:$leaderapplog:0:1 $masterapplog:$supportapplog:0:2
 do
 	echo "PAIR: $pair"
 	txapplog="$(cut -d':' -f1 <<< $pair)"
@@ -436,10 +441,6 @@ do
 	declare $(awk -v devname=$txdevname "$colScript" $uwsimlog)
 
 	efficiency=$(bc <<< "scale=9; $nbytes / $totalTxBytes * 100")
-#	if [ "$protocol" != "dcmac" ]
-#	then
-#		efficiency2=$(bc <<< "scale=9; $nbytes / $totalTxBytes2 * 100")
-#	fi
 
 	echo -e "\tbytes received  ---------  $nbytes bytes" | tee -a genresults
 	throughput=$(bc <<< "scale=9; $nbytes / $elapsed")
@@ -450,10 +451,6 @@ do
 	echo -e "\tTotal collisioned bytes -- $totalColBytes" | tee -a genresults
 	echo -e "\tTotal collisioned pkts --- $totalColPackets" | tee -a genresults
 	echo -e "\tEfficiency --------------- $efficiency" | tee -a genresults
-#	if [ "$protocol" != "dcmac" ]
-#	then
-#		echo -e "\tEfficiency2 -------------- $efficiency2" | tee -a genresults
-#	fi
 	
 	############### END 2 END ################3
 	rm -f end2end.tr
@@ -501,16 +498,6 @@ done
 cd $basedir
 echo "Moving remaining log files..."
 sleep 4s
-
-echo "Data rate: $datarate" | tee -a $resultsdir/notes
-echo "control pkt size: $controlSize"
-echo "image pkt size: $imgSize"
-echo "npkts: $npkts"
-echo "testduration: $testduration"
-echo "control datarate: $controlDatarate"
-echo "img datarate: $imgDatarate"
-echo "protocol: $protocol"
-
 
 mv $uwsimlog $resultsdir
 mv $uwsimlograw $resultsdir

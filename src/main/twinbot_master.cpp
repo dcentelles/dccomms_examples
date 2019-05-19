@@ -312,14 +312,14 @@ int main(int argc, char **argv) {
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       txPacket->SetSeq(npacket);
 
-      txPacket->SetDestAddr(2); // LEADER
+      txPacket->SetDestAddr(1); // LEADER
       txPacket->PayloadUpdated(payloadSize);
       log->Info("TX TO {} SEQ {} SIZE {}", txPacket->GetDestAddr(), npacket,
                 txPacket->GetPacketSize());
 
       node << txPacket;
 
-      txPacket->SetDestAddr(3); // SUPPORT
+      txPacket->SetDestAddr(2); // SUPPORT
       txPacket->PayloadUpdated(payloadSize);
       log->Info("TX TO {} SEQ {} SIZE {}", txPacket->GetDestAddr(), npacket,
                 txPacket->GetPacketSize());

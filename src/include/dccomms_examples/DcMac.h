@@ -39,7 +39,7 @@ public:
   uint8_t GetSrc();
   void SetMasterAckMask(const DcMacAckField &mask);
   void SetSlaveAck(uint8_t node);
-  void SetSlaveAckMask(const DcMacAckField & mask);
+  void SetSlaveAckMask(const DcMacAckField &mask);
 
   uint8_t GetMasterAckMask();
 
@@ -62,9 +62,9 @@ public:
   PacketPtr Create();
 
   void UpdateFCS();
-  static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1, CTSRTS_FIELD_SIZE = 2,
-                   PAYLOAD_SIZE_FIELD_SIZE = 1, MAX_PAYLOAD_SIZE = 2048,
-                   SYNC_FIELD_SIZE = 1,
+  static const int PRE_SIZE = 1, ADD_SIZE = 1, FLAGS_SIZE = 1,
+                   CTSRTS_FIELD_SIZE = 2, PAYLOAD_SIZE_FIELD_SIZE = 1,
+                   MAX_PAYLOAD_SIZE = 2048, SYNC_FIELD_SIZE = 1,
                    FCS_SIZE = 2; // CRC16
 private:
   int _maxPacketSize;
@@ -151,6 +151,21 @@ public:
   virtual void FlushIO();
 
 private:
+  struct TxPacketInfo {
+    PacketPtr pkt;
+    uint32_t size;
+    bool transmitting;
+    double tt;
+    uint32_t dst;
+    TxPacketInfo() : transmitting(false) {}
+  };
+  typedef std::queue<TxPacketInfo> PacketQueue;
+  typedef dccomms::Ptr<std::queue<TxPacketInfo>> PacketQueuePtr;
+  std::mutex _txDataQueue_mutex;
+  PacketQueuePtr _txQueues[10];
+  void InitTxDataQueues();
+  bool SendingData();
+  void PrepareDataAndSend();
   void DiscardPacketsInRxFIFO();
   void SlaveRunRx();
   void MasterRunRx();
@@ -182,7 +197,7 @@ private:
   Ptr<DcMacPacketBuilder> _pb;
   PacketBuilderPtr _highPb;
   PacketPtr _flushPkt;
-  uint16_t _addr, _maxSlaves;
+  uint16_t _addr, _maxSlaves, _maxNodes;
   DcMacRtsDataSizeField _time; // millis
   DcMacPacketPtr _txDataPacket;
   PacketPtr _txUpperPkt;
