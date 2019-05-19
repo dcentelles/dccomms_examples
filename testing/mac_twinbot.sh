@@ -32,7 +32,7 @@ controlDatarate2=$(echo "$controlDatarate*2" | bc)
 imgDuration=$(echo "$imgNumPkts * $imgSize*8 / $imgDatarate" | bc -l)
 controlNumPkts=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate)" | bc)
 controlNumPkts2=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate2)" | bc)
-testduration=$(echo "$imgDuration + 120" | bc -l)
+testduration=$(echo "$imgDuration + 30" | bc -l)
 
 basedir=$(realpath ${basedir}/)
 echo "BASEDIR: $basedir"
@@ -292,10 +292,10 @@ if [ "$protocol" == "dcmac" ]
 then
 	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 else
-	echo "Set env."
-#	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 fi
 
+sleep 5s
 rosrunproc=$!
 sim=$(ps aux | grep "uwsim_binary" | awk -v mpid=$pid '
 BEGIN{\
@@ -334,39 +334,80 @@ if [ "$protocol" == "dcmac" ]
 then
 	colScript=$colScriptDcMac
 	txRaw=$txRawDcMac
+	leaderMasterAddr=0
+	followerAddr=1
+
+	##  SHORT LINKS
+
+	echo "follower"
+	followerapplog="$rawlogdir/follower.log"
+	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --dcmac --add $followerAddr --dstadd 0 --maxnodes 1 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	follower=$!
+
+	echo "leader_master"
+	leadermasterapplog="$rawlogdir/leader_master.log"
+	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader_master --master --dcmac --add $leaderMasterAddr --dstadd 1 --maxnodes 1 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$leadermasterapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	leader_master=$!
+
+	## LONG LINKS
 
 	echo "leader"
 	leaderapplog="$rawlogdir/leader.log"
 	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --dcmac --add 1 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
-	#${bindir}/example4 --tx-packet-size $controlSize --num-packets 1 --node-name comms_leader --dcmac --add 2 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate --log-file "$leaderapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
 	leader=$!
 	
 	echo "support"
 	supportapplog="$rawlogdir/support.log"
 	${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_support --dcmac --add 2 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
-	#${bindir}/example4 --tx-packet-size $imgSize --num-packets 1 --node-name comms_support --dcmac --add 3 --maxnodes 2 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
 	support=$!
 	
 	echo "master"
 	masterapplog="$rawlogdir/master.log"
-	#${bindir}/twinbot_master --tx-packet-size 20 --num-packets 100 --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange 100 --data-rate 80 --log-file "$masterapplog" --ms-start 5000 --propSpeed 1500 --devDelay 2 -l debug 
-	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $controlNumPkts --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$masterapplog" --ms-start 0 --propSpeed $propSpeed --devDelay 2 -l debug & 
-	#${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets 1 --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate --log-file "$masterapplog" --ms-start 0 --propSpeed $propSpeed --devDelay 2 -l debug & 
+	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_master --dcmac --master --add 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$masterapplog" --ms-start 0 --propSpeed $propSpeed --devDelay 2 -l debug & 
 	master=$!
 
 else
 	colScript=$colScriptDcMac
 	txRaw=$txRawDcMac
+	leaderMasterAddr=3
+	followerAddr=4
 
-	#TODO: ...
-	echo "NOT IMPLEMENTED"
-	exit 1
+	##  SHORT LINKS
+
+	echo "follower"
+	followerapplog="$rawlogdir/follower.log"
+	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add $followerAddr --dstadd 3 --maxnodes 1 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	follower=$!
+
+	echo "leader_master"
+	leadermasterapplog="$rawlogdir/leader_master.log"
+	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader_master --add $leaderMasterAddr --dstadd 4 --maxnodes 1 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$leadermasterapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	leader_master=$!
+
+	## LONG LINKS
+
+	echo "leader"
+	leaderapplog="$rawlogdir/leader.log"
+	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --add 1 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	leader=$!
+	
+	echo "support"
+	supportapplog="$rawlogdir/support.log"
+	${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_support --add 2 --dstadd 0 --maxnodes 2 --maxRange $maxRange --data-rate $imgDatarate --log-file "$supportapplog" --ms-start 10000 --propSpeed $propSpeed --devDelay 2 -l debug&
+	support=$!
+	
+	echo "master"
+	masterapplog="$rawlogdir/master.log"
+	${bindir}/twinbot_master --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_master --add 0 --maxnodes 2 --maxRange $maxRange --data-rate $controlDatarate2 --log-file "$masterapplog" --ms-start 0 --propSpeed $propSpeed --devDelay 2 -l debug & 
+	master=$!
+
 fi
 
 sleep ${testduration}s
 
 echo "SIGINT programs..."
 kill -s INT $leader > /dev/null 2> /dev/null
+kill -s INT $leader_master > /dev/null 2> /dev/null
 kill -s INT $follower > /dev/null 2> /dev/null
 kill -s INT $support > /dev/null 2> /dev/null
 kill -s INT $master > /dev/null 2> /dev/null
@@ -384,6 +425,7 @@ sleep 5s
 echo "kill -9 programs..."
 kill -9 $(ps aux | grep "bash .*$scriptName" | awk -v mpid=$pid '{ if(mpid != $2) print $2}') > /dev/null 2>&1
 kill -9 $leader > /dev/null 2> /dev/null
+kill -9 $leader_master > /dev/null 2> /dev/null
 kill -9 $follower > /dev/null 2> /dev/null
 kill -9 $support > /dev/null 2> /dev/null
 kill -9 $master > /dev/null 2> /dev/null
@@ -393,7 +435,7 @@ kill -9 $sim > /dev/null 2> /dev/null
 sleep 10s
 
 #for pair in $leaderapplog:$masterapplog:2:0 $leaderapplog:$followerapplog:2:1 $followerapplog:$leaderapplog:1:2 $supportapplog:$masterapplog:3:0 $masterapplog:$leaderapplog:0:2 $masterapplog:$supportapplog:0:3
-for pair in $leaderapplog:$masterapplog:1:0 $supportapplog:$masterapplog:2:0 $masterapplog:$leaderapplog:0:1 $masterapplog:$supportapplog:0:2
+for pair in $leadermasterapplog:$followerapplog:$leaderMasterAddr:$followerAddr $followerapplog:$leadermasterapplog:$followerAddr:$leaderMasterAddr $leaderapplog:$masterapplog:1:0 $supportapplog:$masterapplog:2:0 $masterapplog:$leaderapplog:0:1 $masterapplog:$supportapplog:0:2
 do
 	echo "PAIR: $pair"
 	txapplog="$(cut -d':' -f1 <<< $pair)"

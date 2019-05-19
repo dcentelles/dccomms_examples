@@ -91,7 +91,14 @@
   -->
   <CustomCommsChannel>
     <id>0</id>
-     <propTimeIncPerMeter>propSpeedValue</propTimeIncPerMeter>
+    <propTimeIncPerMeter>propSpeedValue1</propTimeIncPerMeter>
+    <minPropTime>0</minPropTime>
+    <logLevel>info</logLevel>
+  </CustomCommsChannel>
+
+    <CustomCommsChannel>
+    <id>1</id>
+    <propTimeIncPerMeter>propSpeedValue2</propTimeIncPerMeter>
     <minPropTime>0</minPropTime>
     <logLevel>info</logLevel>
   </CustomCommsChannel>
@@ -366,6 +373,55 @@
       <logLevel>info</logLevel>
     </CustomCommsDevice>
 
+    <CustomCommsDevice>
+      <dccommsId>comms_leader_master</dccommsId>
+      <txChannelId>1</txChannelId>
+      <rxChannelId>1</rxChannelId>
+      <relativeTo>base_link</relativeTo>
+      <mac>3</mac>
+      <macProtocol>
+        <name></name>
+        <maxDistance>15</maxDistance>
+      </macProtocol>
+      <bitrate>1800</bitrate>
+      <txFifoSize>500</txFifoSize>
+      <tfId>comms_leader_master</tfId>
+      <position>
+        <x>-0.15</x>
+        <y>0.14</y>
+        <z>-0.03</z>
+      </position>
+      <orientation>
+        <r>0</r>
+        <p>3.14</p>
+        <y>0</y>
+      </orientation>        
+      <mesh>
+        <path>data/objects/s2cr.3ds</path>
+        <scaleFactor>
+          <x>0.0005</x>
+          <y>0.0005</y>
+          <z>0.0005</z>
+        </scaleFactor>
+      </mesh>
+      <intrinsicDelay>1</intrinsicDelay>
+      <maxDistance>15</maxDistance>
+      <minDistance>0</minDistance>
+      <rateErrorModel>
+        <errorUnit>bit</errorUnit>
+        <errorRateExpr>0</errorRateExpr>
+      </rateErrorModel>
+      <txPacketBuilder>
+        <className>DcMacPacketBuilder</className>
+        <libPath>packetslib</libPath>
+      </txPacketBuilder>
+      <rxPacketBuilder>
+        <className>DcMacPacketBuilder</className>
+        <libPath>packetslib</libPath>
+      </rxPacketBuilder>
+      <logLevel>info</logLevel>
+    </CustomCommsDevice>
+
     <LedArray>
       <name>leader_leds</name>
       <relativeTo>base_link</relativeTo>
@@ -421,13 +477,13 @@
     </virtualCamera>
     <CustomCommsDevice>
       <dccommsId>comms_follower</dccommsId>
-      <txChannelId>0</txChannelId>
-      <rxChannelId>0</rxChannelId>
+      <txChannelId>1</txChannelId>
+      <rxChannelId>1</rxChannelId>
       <relativeTo>base_link</relativeTo>
-      <mac>3</mac>
+      <mac>4</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>100</maxDistance>
+        <maxDistance>15</maxDistance>
       </macProtocol>
       <bitrate>1800</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -451,7 +507,7 @@
         </scaleFactor>
       </mesh>
       <intrinsicDelay>1</intrinsicDelay>
-      <maxDistance>100</maxDistance>
+      <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
         <errorUnit>bit</errorUnit>
@@ -614,6 +670,11 @@
     <CustomCommsDeviceROS>
       <name>comms_leader</name>
       <topic> /uwsim/leader/comms</topic>
+      <rate>10</rate>
+    </CustomCommsDeviceROS>
+    <CustomCommsDeviceROS>
+      <name>comms_leader_master</name>
+      <topic> /uwsim/leader/comms_master</topic>
       <rate>10</rate>
     </CustomCommsDeviceROS>
     <CustomCommsDeviceROS>
