@@ -90,7 +90,7 @@
   <netTracingScript>
     <className>TwinbotNetSimTracing</className>
     <libPath>libuwsim_netsim_scripts.so</libPath>
-    <logToFile>/home/irs/programming/dccomms_examples/testing/ieeesi/twinbot_dcmac/uwsimnet.log</logToFile>
+    <logToFile></logToFile>
   </netTracingScript>
 
   <!--
@@ -100,14 +100,14 @@
   -->
   <CustomCommsChannel>
     <id>0</id>
-    <propTimeIncPerMeter>3.333333333e-061</propTimeIncPerMeter>
+    <propTimeIncPerMeter>0.666</propTimeIncPerMeter>
     <minPropTime>0</minPropTime>
     <logLevel>info</logLevel>
   </CustomCommsChannel>
 
     <CustomCommsChannel>
     <id>1</id>
-    <propTimeIncPerMeter>3.333333333e-062</propTimeIncPerMeter>
+    <propTimeIncPerMeter>3.333333333e-06</propTimeIncPerMeter>
     <minPropTime>0</minPropTime>
     <logLevel>info</logLevel>
   </CustomCommsChannel>
@@ -134,7 +134,7 @@
   </vehicle>
   <!-- BUOY -->
   <vehicle>
-    <name>master</name>
+    <name>buoy</name>
     <file>data/scenes/buoy_v0.urdf</file>
     <position>
       <x> 0</x>
@@ -148,7 +148,7 @@
     </orientation>
 
     <CustomCommsDevice>
-      <dccommsId>comms_master</dccommsId>
+      <dccommsId>comms_buoy</dccommsId>
       <txChannelId>0</txChannelId>
       <rxChannelId>0</rxChannelId>
       <relativeTo>base_link</relativeTo>
@@ -159,7 +159,7 @@
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
-      <tfId>comms_master</tfId>
+      <tfId>comms_buoy</tfId>
       <position>
         <x>0</x>
         <y>0</y>
@@ -260,7 +260,7 @@
         </scaleFactor>
       </mesh>
       <intrinsicDelay>1</intrinsicDelay>
-      <maxDistance>100</maxDistance>
+      <maxDistance>15</maxDistance>
       <minDistance>0</minDistance>
       <rateErrorModel>
         <errorUnit>bit</errorUnit>
@@ -938,8 +938,8 @@
       <rate>10</rate>
     </CustomCommsDeviceROS>
     <CustomCommsDeviceROS>
-      <name>comms_master</name>
-      <topic> /uwsim/master/comms</topic>
+      <name>comms_buoy</name>
+      <topic> /uwsim/buoy/comms</topic>
       <rate>10</rate>
     </CustomCommsDeviceROS>
 
