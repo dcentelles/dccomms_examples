@@ -155,7 +155,6 @@
       <mac>0</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>100</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -236,7 +235,6 @@
       <mac>1</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>15</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -299,7 +297,6 @@
       <mac>10</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>100</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -361,7 +358,6 @@
       <mac>11</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>100</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -423,7 +419,6 @@
       <mac>12</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>100</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -485,7 +480,6 @@
       <mac>13</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>100</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -587,7 +581,6 @@
       <mac>2</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>15</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>
@@ -689,7 +682,6 @@
       <mac>3</mac>
       <macProtocol>
         <name></name>
-        <maxDistance>15</maxDistance>
       </macProtocol>
       <bitrate>1900</bitrate>
       <txFifoSize>500</txFifoSize>

@@ -204,26 +204,6 @@ END{\
     printf("totalTxPackets=%d\n", lines)
 }'
 
-
-txRawDcMac='
-BEGIN{\
-    nbytes = 0
-    lines = 0
-}
-{\
-
-    where = match($0, "TX -- .*"devname".* Size: (.*)$", arr)
-    if(where != 0)
-    {
-	nbytes += arr[1]
-        lines += 1
-    }
-}
-END{\
-    printf("totalTxBytes=%d\n", nbytes);
-    printf("totalTxPackets=%d\n", lines)
-}'
-
 colScript='
 BEGIN{\
     nbytes = 0
@@ -241,10 +221,6 @@ END{\
     printf("totalColBytes=%d\n", nbytes);
     printf("totalColPackets=%d\n", lines)
 }'
-
-
-
-colScriptDcMac=$colScript
 
 ###################################################
 ###################################################
@@ -275,15 +251,6 @@ then
 	tmplscene=$localscenesdir/twinbot.xml
 	scene=$scenesdir/nomac.xml
 	cp $tmplscene $scene
-	#tmplscene=$localscenesdir/netsim_twinbot_dcmac.xml
-	#scene=$scenesdir/twinbot_dcmac.xml
-	#cp $tmplscene $scene
-	#gitrev=$(git rev-parse --short HEAD)
-	#library=../build/libdccomms_examples_${gitrev}_packets.so
-	#library=$(realpath ${library})
-	#library=$(echo "$library" | sed 's/\//\\\//g')
-	#echo $library
-	#sed -i "s/packetslib/${library}/g" $scene
 else
 	tmplscene=$localscenesdir/twinbot.xml
 	scene=$scenesdir/$protocol.xml
@@ -293,11 +260,9 @@ fi
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile><\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
-sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
-
 cat $scene
 
-if [ "$protocol" == "dcmac" ]
+if [ "$protocol" == "nomac" ]
 then
 	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
 else
@@ -339,67 +304,60 @@ echo $rosrunproc > rosrunpid
 echo $sim > simpid
 sleep 35s
 
-if [ "$protocol" == "dcmac" ]
-then
-	echo "NOT USED"
-	exit 1;
-else
-	colScript=$colScriptDcMac
-	txRaw=$txRawDcMac
-	leaderAddr=2
-	followerAddr=3
-	supportAddr=1
-	explorer0Addr=10
-	explorer1Addr=11
-	explorer2Addr=12
-	explorer3Addr=13
-	buoyAddr=0
+leaderAddr=2
+followerAddr=3
+supportAddr=1
+explorer0Addr=10
+explorer1Addr=11
+explorer2Addr=12
+explorer3Addr=13
+buoyAddr=0
 
-	##  SHORT LINKS
+##  SHORT LINKS
 
-	echo "follower"
-	followerapplog="$rawlogdir/follower.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add $followerAddr --dstadd $leaderAddr --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 -l debug&
-	follower=$!
+echo "follower"
+followerapplog="$rawlogdir/follower.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add $followerAddr --dstadd $leaderAddr --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 &
+follower=$!
 
-	echo "leader"
-	leaderapplog="$rawlogdir/leader.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --add $leaderAddr --dstadd $followerAddr --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 -l debug&
-	leader=$!
+echo "leader"
+leaderapplog="$rawlogdir/leader.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --add $leaderAddr --dstadd $followerAddr --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 &
+leader=$!
 
-	echo "support"
-	supportapplog="$rawlogdir/support.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_support --add $supportAddr --dstadd $leaderAddr --data-rate $controlDatarate0 --log-file "$supportapplog" --ms-start 10000 -l debug&
-	support=$!
+echo "support"
+supportapplog="$rawlogdir/support.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_support --add $supportAddr --dstadd $leaderAddr --data-rate $controlDatarate0 --log-file "$supportapplog" --ms-start 10000 &
+support=$!
 
-	## LONG LINKS
+## LONG LINKS
 
-	echo "buoy"
-	buoyapplog="$rawlogdir/buoy.log"
-	${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_buoy --add $buoyAddr --dstadd $explorer0Addr --data-rate $controlDatarate0 --log-file "$buoyapplog" --ms-start 10000 -l debug&
-	buoy=$!
+echo "buoy"
+buoyapplog="$rawlogdir/buoy.log"
+${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_buoy --add $buoyAddr --dstadd $explorer0Addr --data-rate $controlDatarate0 --log-file "$buoyapplog" --ms-start 10000 &
+buoy=$!
 	
-	echo "explorer0"
-	explorer0applog="$rawlogdir/explorer0.log"
-	${bindir}/example4 --tx-packet-size $imgNumPkts --num-packets $imgNumPkts --node-name comms_explorer0 --add $explorer0Addr --dstadd $buoyAddr -data-rate $imgDatarate --log-file "$explorer0applog" --ms-start 10000 -l debug&
-	explorer0=$!
+echo "explorer0"
+explorer0applog="$rawlogdir/explorer0.log"
+${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer0 --add $explorer0Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer0applog" --ms-start 10000 &
+explorer0=$!
 
-	echo "explorer1"
-	explorer1applog="$rawlogdir/explorer1.log"
-	${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer1 --add $explorer1Addr --dstadd $buoyAddr -data-rate $imgDatarate --log-file "$explorer1applog" --ms-start 10000 -l debug&
-	explorer1=$!
+echo "explorer1"
+explorer1applog="$rawlogdir/explorer1.log"
+${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer1 --add $explorer1Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer1applog" --ms-start 10000 &
+explorer1=$!
 
-	echo "explorer2"
-	explorer2applog="$rawlogdir/explorer2.log"
-	${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer2 --add $explorer2Addr --dstadd $buoyAddr -data-rate $imgDatarate --log-file "$explorer2applog" --ms-start 10000 -l debug&
-	explorer2=$!
+echo "explorer2"
+explorer2applog="$rawlogdir/explorer2.log"
+${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer2 --add $explorer2Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer2applog" --ms-start 10000 &
+explorer2=$!
 
-	echo "explorer3"
-	explorer3applog="$rawlogdir/explorer3.log"
-	${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer3 --add $explorer3Addr --dstadd $buoyAddr -data-rate $imgDatarate --log-file "$explorer3applog" --ms-start 10000 -l debug&
-	explorer3=$!
+echo "explorer3"
+explorer3applog="$rawlogdir/explorer3.log"
+${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer3 --add $explorer3Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer3applog" --ms-start 10000 &
+explorer3=$!
 
-fi
+
 
 sleep ${testduration}s
 
@@ -415,13 +373,13 @@ kill -s INT $explorer3 > /dev/null 2> /dev/null
 kill -s INT $rosrunproc > /dev/null 2> /dev/null
 kill -s INT $sim > /dev/null 2> /dev/null
 
-sleep 5s
+sleep 10s
 
 echo "SIGTERM programs..."
 kill -s TERM $rosrunproc > /dev/null 2> /dev/null
 kill -s TERM $sim > /dev/null 2> /dev/null
 
-sleep 5s
+sleep 10s
 
 echo "kill -9 programs..."
 kill -9 $(ps aux | grep "bash .*$scriptName" | awk -v mpid=$pid '{ if(mpid != $2) print $2}') > /dev/null 2>&1
