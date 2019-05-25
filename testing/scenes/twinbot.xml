@@ -213,8 +213,8 @@
     <virtualCamera>
       <name>support_camera</name>
       <relativeTo>base_link</relativeTo>
-      <resw> 320 </resw>
-      <resh> 240 </resh>
+      <resw> 352 </resw>
+      <resh> 288 </resh>
       <position>
         <x>0.28</x>
         <y> 0.0 </y>
@@ -273,6 +273,22 @@
 
       <logLevel>info</logLevel>
     </CustomCommsDevice>
+    <LedArray>
+      <name>support_leds</name>
+      <relativeTo>base_link</relativeTo>
+      <position>
+        <x>0.2</x>
+        <y>0</y>
+        <z>-0.05</z>
+      </position>
+      <orientation>
+        <r>0</r>
+        <p>0</p>
+        <y>0</y>
+      </orientation>
+      <radio>0.02</radio>
+      <space>0.30</space>
+    </LedArray>
   </vehicle>
 
   <!-- explorer 0 -->
@@ -543,8 +559,8 @@
     <virtualCamera>
       <name>leader_camera</name>
       <relativeTo>part0</relativeTo>
-      <resw> 320 </resw>
-      <resh> 240 </resh>
+      <resw> 352 </resw>
+      <resh> 288 </resh>
       <position>
         <x>-0.2</x>
         <y> -0.1 </y>
@@ -661,8 +677,8 @@
     <virtualCamera>
       <name>follower_camera</name>
       <relativeTo>part0</relativeTo>
-      <resw> 320 </resw>
-      <resh> 240 </resh>
+      <resw> 352 </resw>
+      <resh> 288 </resh>
       <position>
         <x>-0.2</x>
         <y> -0.1 </y>
