@@ -149,8 +149,8 @@
 
     <CustomCommsDevice>
       <dccommsId>comms_buoy</dccommsId>
-      <txChannelId>0</txChannelId>
-      <rxChannelId>0</rxChannelId>
+      <txChannelId>longLinkChannel</txChannelId>
+      <rxChannelId>longLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>0</mac>
       <macProtocol>
@@ -185,10 +185,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
 
       <logLevel>info</logLevel>
@@ -229,8 +231,8 @@
 
     <CustomCommsDevice>
       <dccommsId>comms_support</dccommsId>
-      <txChannelId>1</txChannelId>
-      <rxChannelId>1</rxChannelId>
+      <txChannelId>shortLinkChannel</txChannelId>
+      <rxChannelId>shortLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>1</mac>
       <macProtocol>
@@ -265,10 +267,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
 
       <logLevel>info</logLevel>
@@ -307,8 +311,8 @@
     </orientation>
     <CustomCommsDevice>
       <dccommsId>comms_explorer0</dccommsId>
-      <txChannelId>0</txChannelId>
-      <rxChannelId>0</rxChannelId>
+      <txChannelId>longLinkChannel</txChannelId>
+      <rxChannelId>longLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>10</mac>
       <macProtocol>
@@ -343,10 +347,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -368,8 +374,8 @@
     </orientation>
     <CustomCommsDevice>
       <dccommsId>comms_explorer1</dccommsId>
-      <txChannelId>0</txChannelId>
-      <rxChannelId>0</rxChannelId>
+      <txChannelId>longLinkChannel</txChannelId>
+      <rxChannelId>longLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>11</mac>
       <macProtocol>
@@ -404,10 +410,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -429,8 +437,8 @@
     </orientation>
     <CustomCommsDevice>
       <dccommsId>comms_explorer2</dccommsId>
-      <txChannelId>0</txChannelId>
-      <rxChannelId>0</rxChannelId>
+      <txChannelId>longLinkChannel</txChannelId>
+      <rxChannelId>longLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>12</mac>
       <macProtocol>
@@ -465,10 +473,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -490,8 +500,8 @@
     </orientation>
     <CustomCommsDevice>
       <dccommsId>comms_explorer3</dccommsId>
-      <txChannelId>0</txChannelId>
-      <rxChannelId>0</rxChannelId>
+      <txChannelId>longLinkChannel</txChannelId>
+      <rxChannelId>longLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>13</mac>
       <macProtocol>
@@ -526,10 +536,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -591,8 +603,8 @@
      
     <CustomCommsDevice>
       <dccommsId>comms_leader</dccommsId>
-      <txChannelId>1</txChannelId>
-      <rxChannelId>1</rxChannelId>
+      <txChannelId>shortLinkChannel</txChannelId>
+      <rxChannelId>shortLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>2</mac>
       <macProtocol>
@@ -627,10 +639,12 @@
         <errorRateExpr>0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -692,8 +706,8 @@
     </virtualCamera>
     <CustomCommsDevice>
       <dccommsId>comms_follower</dccommsId>
-      <txChannelId>1</txChannelId>
-      <rxChannelId>1</rxChannelId>
+      <txChannelId>shortLinkChannel</txChannelId>
+      <rxChannelId>shortLinkChannel</rxChannelId>
       <relativeTo>base_link</relativeTo>
       <mac>3</mac>
       <macProtocol>
@@ -728,10 +742,12 @@
         <errorRateExpr>0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>

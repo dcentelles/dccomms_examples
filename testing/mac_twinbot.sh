@@ -12,24 +12,14 @@ controlDatarate=$4
 basedir=$(realpath ${5}/)
 imgNumPkts=$6
 protocol=$7
-propSpeed=$8
 devDelay=2
-
-echo "prop speed arg: $propSpeed"
-if [ "$propSpeed" == "ac" ]
-then
-	propSpeed=1500
-	uwsimPropSpeed="0.666"
-	maxRange=100
-else
-	propSpeed=300000000
-	uwsimPropSpeed="3.333333333e-06"
-	maxRange=100
-fi
+longLinkMaxRange=100
+shortLinkMaxRange=15
+longLinkChannel=0
+shortLinkChannel=1
 
 controlDatarate0=$(echo "$controlDatarate/4" | bc)
 controlDatarate2=$(echo "$controlDatarate*2" | bc)
-
 
 imgDuration=$(echo "$imgNumPkts * $imgSize*8 / $imgDatarate" | bc -l)
 controlNumPkts0=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate0)" | bc)
@@ -54,14 +44,18 @@ echo "control pkt size: $controlSize" | tee -a $resultsdir/notes
 echo "image pkt size: $imgSize" | tee -a $resultsdir/notes
 echo "num. image pkts: $imgNumPkts" | tee -a $resultsdir/notes
 echo "num. control pkts 0: $controlNumPkts0" | tee -a $resultsdir/notes
-echo "num. control pkts: $controlNumPkts" | tee -a $resultsdir/notes
+echo "num. control pkts 1: $controlNumPkts" | tee -a $resultsdir/notes
 echo "num. control pkts 2: $controlNumPkts2" | tee -a $resultsdir/notes
 echo "test duration: $testduration" | tee -a $resultsdir/notes
-echo "control datarate0: $controlDatarate0" | tee -a $resultsdir/notes
-echo "control datarate: $controlDatarate" | tee -a $resultsdir/notes
-echo "control datarate2: $controlDatarate2" | tee -a $resultsdir/notes
+echo "control datarate 0: $controlDatarate0" | tee -a $resultsdir/notes
+echo "control datarate 1: $controlDatarate" | tee -a $resultsdir/notes
+echo "control datarate 2: $controlDatarate2" | tee -a $resultsdir/notes
 echo "img datarate: $imgDatarate" | tee -a $resultsdir/notes
 echo "protocol: $protocol" | tee -a $resultsdir/notes
+echo "long link channel: $longLinkChannel" | tee -a $resultsdir/notes
+echo "short link channel: $shortLinkChannel" | tee -a $resultsdir/notes
+echo "long link range: $longLinkMaxRange" | tee -a $resultsdir/notes
+echo "short link range: $shortLinkMaxRange" | tee -a $resultsdir/notes
 
 kill -9 $(ps aux | grep "bash .*$scriptName" | awk -v mpid=$pid '{ if(mpid != $2) print $2}') > /dev/null 2>&1
 
@@ -245,28 +239,46 @@ scenesdir=$(rospack find uwsim)/data/scenes
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
+scene=$scenesdir/$protocol.xml
 if [ "$protocol" == "nomac" ]
 then
-	echo "No mac"
 	tmplscene=$localscenesdir/twinbot.xml
-	scene=$scenesdir/nomac.xml
 	cp $tmplscene $scene
 else
 	tmplscene=$localscenesdir/twinbot.xml
-	scene=$scenesdir/$protocol.xml
-	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
+	cp $tmplscene $scene
+	if [ "$protocol" == "dcmac" ]
+	then
+		gitrev=$(git rev-parse --short HEAD)
+		library=../build/libdccomms_examples_${gitrev}_packets.so
+		library=$(realpath ${library})
+		library=$(echo "$library" | sed 's/\//\\\//g')
+		echo $library
+		pktbuilder="DcMacPacketBuilder"
+		libpath="<libPath>$library<\/libPath>"
+	else
+		sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
+		pktbuilder="VariableLength2BPacketBuilder"
+		libpath=""
+	fi
 fi
 
+sed -i "s/packetbuilder/${pktbuilder}/g" $scene
+sed -i "s/builderlibpath/${libpath}/g" $scene
+sed -i "s/longLinkMaxRange/${longLinkMaxRange}/g" $scene
+sed -i "s/shortLinkMaxRange/${shortLinkMaxRange}/g" $scene
+sed -i "s/shortLinkChannel/${shortLinkChannel}/g" $scene
+sed -i "s/longLinkChannel/${longLinkChannel}/g" $scene
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile><\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
 cat $scene
 
-if [ "$protocol" == "nomac" ]
+if [ "$protocol" == "nomac" ] || [ "$protocol" == "dcmac" ]
 then
-	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ 2>&1 | tee $uwsimlograw & 
 else
-	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ --disableShaders 2>&1 | tee $uwsimlograw & 
+	NS_LOG="AquaSimMac=all|prefix_time:AquaSimSFama=all|prefix_time:AquaSimAloha=all|prefix_time" rosrun uwsim uwsim --configfile $scene --dataPath $(rospack find uwsim)/data/scenes/ 2>&1 | tee $uwsimlograw & 
 fi
 
 sleep 5s
@@ -314,7 +326,6 @@ explorer3Addr=13
 buoyAddr=0
 
 ##  SHORT LINKS
-
 echo "follower"
 followerapplog="$rawlogdir/follower.log"
 ${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add $followerAddr --dstadd $leaderAddr --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 &
@@ -331,7 +342,6 @@ ${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 
 support=$!
 
 ## LONG LINKS
-
 echo "buoy"
 buoyapplog="$rawlogdir/buoy.log"
 ${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_buoy --add $buoyAddr --dstadd $explorer0Addr --data-rate $controlDatarate0 --log-file "$buoyapplog" --ms-start 10000 &
