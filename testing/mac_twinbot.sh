@@ -18,6 +18,20 @@ shortLinkMaxRange=15
 longLinkChannel=0
 shortLinkChannel=1
 
+if [ "$shortLinkChannel" -eq 1 ]
+then
+	shortLinkPropSpeed=300000000
+else
+	shortLinkPropSpeed=1500
+fi
+
+if [ "$longLinkChannel" -eq 1 ]
+then
+	longLinkPropSpeed=300000000
+else
+	longLinkPropSpeed=1500
+fi
+
 controlDatarate0=$(echo "$controlDatarate/4" | bc)
 controlDatarate2=$(echo "$controlDatarate*2" | bc)
 
@@ -180,23 +194,45 @@ END{\
 	printf("%.9f\t%.9f\t%.9f\n", avg, sd, var);
 }'
 
-txRaw='
-BEGIN{\
-    nbytes = 0
-    lines = 0
-}
-{\
-    where = match($0, "MAC TX -- .*"devname".* Size: (.*)$", arr)
-    if(where != 0)
-    {
-        nbytes += arr[1]
-        lines += 1;
-    }
-}
-END{\
-    printf("totalTxBytes=%d\n", nbytes);
-    printf("totalTxPackets=%d\n", lines)
-}'
+if [ "$protocol" == "dcmac" ]
+then
+	txRaw='
+	BEGIN{\
+		nbytes = 0
+		lines = 0
+	}
+	{\
+
+		where = match($0, "TX -- .*"devname".* Size: (.*)$", arr)
+		if(where != 0)
+		{
+		nbytes += arr[1]
+			lines += 1
+		}
+	}
+	END{\
+		printf("totalTxBytes=%d\n", nbytes);
+		printf("totalTxPackets=%d\n", lines)
+	}'
+else
+	txRaw='
+	BEGIN{\
+		nbytes = 0
+		lines = 0
+	}
+	{\
+		where = match($0, "MAC TX -- .*"devname".* Size: (.*)$", arr)
+		if(where != 0)
+		{
+			nbytes += arr[1]
+			lines += 1;
+		}
+	}
+	END{\
+		printf("totalTxBytes=%d\n", nbytes);
+		printf("totalTxPackets=%d\n", lines)
+	}'
+fi
 
 colScript='
 BEGIN{\
@@ -316,57 +352,312 @@ echo $rosrunproc > rosrunpid
 echo $sim > simpid
 sleep 35s
 
-leaderAddr=2
-followerAddr=3
-supportAddr=1
-explorer0Addr=10
-explorer1Addr=11
-explorer2Addr=12
-explorer3Addr=13
-buoyAddr=0
 
-##  SHORT LINKS
-echo "follower"
-followerapplog="$rawlogdir/follower.log"
-${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_follower --add $followerAddr --dstadd $leaderAddr --data-rate $controlDatarate2 --log-file "$followerapplog" --ms-start 10000 &
-follower=$!
+if [ "$protocol" == "dcmac" ]
+then
+	if [ $longLinkChannel -eq $shortLinkChannel ]
+	then
+		leaderAddr=1
+		followerAddr=2
+		supportAddr=3
+		explorer0Addr=4
+		explorer1Addr=5
+		explorer2Addr=6
+		explorer3Addr=7
+		buoyAddr=0
+		shortLinkMaxNodes=6
+		longLinkMaxNodes=6
+		shortLinkMaster=""
+		longLinkMaster="--master"
+	else
+		leaderAddr=1
+		followerAddr=2
+		supportAddr=0
+		explorer0Addr=1
+		explorer1Addr=2
+		explorer2Addr=3
+		explorer3Addr=4
+		buoyAddr=0
+		shortLinkMaxNodes=2
+		longLinkMaxNodes=4
+		shortLinkMaster="--master"
+		longLinkMaster="--master"
+	fi
 
-echo "leader"
-leaderapplog="$rawlogdir/leader.log"
-${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts2 --node-name comms_leader --add $leaderAddr --dstadd $followerAddr --data-rate $controlDatarate2 --log-file "$leaderapplog" --ms-start 10000 &
-leader=$!
+	##  SHORT LINKS
+	echo "follower"
+	followerapplog="$rawlogdir/follower.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts2 \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $shortLinkMaxNodes \
+		--propSpeed $shortLinkPropSpeed \
+		--node-name comms_follower \
+		--add $followerAddr \
+		--dstadd $leaderAddr \
+		--data-rate $controlDatarate2 \
+		--log-file "$followerapplog" \
+		-l debug \
+		--ms-start 10000 &
 
-echo "support"
-supportapplog="$rawlogdir/support.log"
-${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_support --add $supportAddr --dstadd $leaderAddr --data-rate $controlDatarate0 --log-file "$supportapplog" --ms-start 10000 &
-support=$!
+	follower=$!
 
-## LONG LINKS
-echo "buoy"
-buoyapplog="$rawlogdir/buoy.log"
-${bindir}/example4 --tx-packet-size $controlSize --num-packets $controlNumPkts0 --node-name comms_buoy --add $buoyAddr --dstadd $explorer0Addr --data-rate $controlDatarate0 --log-file "$buoyapplog" --ms-start 10000 &
-buoy=$!
+	echo "leader"
+	leaderapplog="$rawlogdir/leader.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts2 \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $shortLinkMaxNodes \
+		--propSpeed $shortLinkPropSpeed \
+		--node-name comms_leader \
+		--add $leaderAddr \
+		--dstadd $followerAddr \
+		--data-rate $controlDatarate2 \
+		--log-file "$leaderapplog" 	\
+		-l debug \
+		--ms-start 10000 &
 	
-echo "explorer0"
-explorer0applog="$rawlogdir/explorer0.log"
-${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer0 --add $explorer0Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer0applog" --ms-start 10000 &
-explorer0=$!
+	leader=$!
 
-echo "explorer1"
-explorer1applog="$rawlogdir/explorer1.log"
-${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer1 --add $explorer1Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer1applog" --ms-start 10000 &
-explorer1=$!
+	echo "SHORT LINK MASTER: $shortLinkMaster"
+	echo "support"
+	supportapplog="$rawlogdir/support.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts0 \
+		--devDelay $devDelay \
+		--dcmac \
+		--master \
+		--maxnodes $shortLinkMaxNodes \
+		--propSpeed $shortLinkPropSpeed \
+		--node-name comms_support \
+		--add $supportAddr \
+		--dstadd $leaderAddr \
+		--data-rate $controlDatarate0 \
+		--log-file "$supportapplog" \
+		-l debug \
+		--ms-start 10000 &
 
-echo "explorer2"
-explorer2applog="$rawlogdir/explorer2.log"
-${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer2 --add $explorer2Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer2applog" --ms-start 10000 &
-explorer2=$!
+	support=$!
 
-echo "explorer3"
-explorer3applog="$rawlogdir/explorer3.log"
-${bindir}/example4 --tx-packet-size $imgSize --num-packets $imgNumPkts --node-name comms_explorer3 --add $explorer3Addr --dstadd $buoyAddr --data-rate $imgDatarate --log-file "$explorer3applog" --ms-start 10000 &
-explorer3=$!
+	## LONG LINKS
+	echo "buoy"
+	buoyapplog="$rawlogdir/buoy.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts0 \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $longLinkMaxNodes \
+		--master \
+		--log-file "$buoyapplog" \
+		--propSpeed $longLinkPropSpeed \
+		--add $buoyAddr \
+		--node-name comms_buoy \
+		--dstadd $explorer0Addr \
+		--data-rate $controlDatarate0 \
+		--l debug \
+		--ms-start 10000 &
+	
+	buoy=$!
+		
+	echo "explorer0"
+	explorer0applog="$rawlogdir/explorer0.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $longLinkMaxNodes \
+		--propSpeed $longLinkPropSpeed \
+		--node-name comms_explorer0 \
+		--add $explorer0Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer0applog" \
+		-l debug \
+		--ms-start 10000 &
 
+	explorer0=$!
+
+	echo "explorer1"
+	explorer1applog="$rawlogdir/explorer1.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer1 \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $longLinkMaxNodes \
+		--propSpeed $longLinkPropSpeed \
+		--add $explorer1Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer1applog" \
+		-l debug \
+		--ms-start 10000 &
+
+	explorer1=$!
+
+	echo "explorer2"
+	explorer2applog="$rawlogdir/explorer2.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer2 \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $longLinkMaxNodes \
+		--propSpeed $longLinkPropSpeed \
+		--add $explorer2Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer2applog" \
+		-l debug \
+		--ms-start 10000 &
+
+	explorer2=$!
+
+	echo "explorer3"
+	explorer3applog="$rawlogdir/explorer3.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer3 \
+		--devDelay $devDelay \
+		--dcmac \
+		--maxnodes $longLinkMaxNodes \
+		--propSpeed $longLinkPropSpeed \
+		--add $explorer3Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer3applog" \
+		-l debug \
+		--ms-start 10000 &
+
+	explorer3=$!
+
+else
+	leaderAddr=2
+	followerAddr=3
+	supportAddr=1
+	explorer0Addr=10
+	explorer1Addr=11
+	explorer2Addr=12
+	explorer3Addr=13
+	buoyAddr=0
+
+	##  SHORT LINKS
+	echo "follower"
+	followerapplog="$rawlogdir/follower.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts2 \
+		--node-name comms_follower \
+		--add $followerAddr \
+		--dstadd $leaderAddr \
+		--data-rate $controlDatarate2 \
+		--log-file "$followerapplog" \
+		--ms-start 10000 &
+	follower=$!
+
+	echo "leader"
+	leaderapplog="$rawlogdir/leader.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts2 \
+		--node-name comms_leader \
+		--add $leaderAddr \
+		--dstadd $followerAddr \
+		--data-rate $controlDatarate2 \
+		--log-file "$leaderapplog" \
+		--ms-start 10000 &
+	leader=$!
+
+	echo "support"
+	supportapplog="$rawlogdir/support.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts0 \
+		--node-name comms_support \
+		--add $supportAddr \
+		--dstadd $leaderAddr \
+		--data-rate $controlDatarate0 \
+		--log-file "$supportapplog" \
+		--ms-start 10000 &
+	support=$!
+
+	## LONG LINKS
+	echo "buoy"
+	buoyapplog="$rawlogdir/buoy.log"
+	${bindir}/example4 \
+		--tx-packet-size $controlSize \
+		--num-packets $controlNumPkts0 \
+		--node-name comms_buoy \
+		--add $buoyAddr \
+		--dstadd $explorer0Addr \
+		--data-rate $controlDatarate0 \
+		--log-file "$buoyapplog" \
+		--ms-start 10000 &
+	buoy=$!
+		
+	echo "explorer0"
+	explorer0applog="$rawlogdir/explorer0.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer0 \
+		--add $explorer0Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer0applog" \
+		--ms-start 10000 &
+	explorer0=$!
+
+	echo "explorer1"
+	explorer1applog="$rawlogdir/explorer1.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer1 \
+		--add $explorer1Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer1applog" \
+		--ms-start 10000 &
+	explorer1=$!
+
+	echo "explorer2"
+	explorer2applog="$rawlogdir/explorer2.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer2 \
+		--add $explorer2Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer2applog" \
+		--ms-start 10000 &
+	explorer2=$!
+
+	echo "explorer3"
+	explorer3applog="$rawlogdir/explorer3.log"
+	${bindir}/example4 \
+		--tx-packet-size $imgSize \
+		--num-packets $imgNumPkts \
+		--node-name comms_explorer3 \
+		--add $explorer3Addr \
+		--dstadd $buoyAddr \
+		--data-rate $imgDatarate \
+		--log-file "$explorer3applog" \
+		--ms-start 10000 &
+	explorer3=$!
+
+fi
 
 
 sleep ${testduration}s
