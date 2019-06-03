@@ -17,6 +17,7 @@ longLinkMaxRange=100
 shortLinkMaxRange=15
 longLinkChannel=0
 shortLinkChannel=1
+devBitRate=1800
 
 if [ "$shortLinkChannel" -eq 1 ]
 then
@@ -399,6 +400,7 @@ then
 		--dstadd $leaderAddr \
 		--data-rate $controlDatarate2 \
 		--log-file "$followerapplog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 
@@ -417,7 +419,8 @@ then
 		--add $leaderAddr \
 		--dstadd $followerAddr \
 		--data-rate $controlDatarate2 \
-		--log-file "$leaderapplog" 	\
+		--log-file "$leaderapplog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 	
@@ -428,7 +431,7 @@ then
 	supportapplog="$rawlogdir/support.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts0 \
+		--num-packets $controlNumPkts \
 		--devDelay $devDelay \
 		--dcmac \
 		--master \
@@ -437,8 +440,9 @@ then
 		--node-name comms_support \
 		--add $supportAddr \
 		--dstadd $leaderAddr \
-		--data-rate $controlDatarate0 \
+		--data-rate $controlDatarate \
 		--log-file "$supportapplog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 
@@ -460,6 +464,7 @@ then
 		--node-name comms_buoy \
 		--dstadd $explorer0Addr \
 		--data-rate $controlDatarate0 \
+		--devBitRate $devBitRate \
 		--l debug \
 		--ms-start 10000 &
 	
@@ -479,6 +484,7 @@ then
 		--dstadd $buoyAddr \
 		--data-rate $imgDatarate \
 		--log-file "$explorer0applog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 
@@ -498,6 +504,7 @@ then
 		--dstadd $buoyAddr \
 		--data-rate $imgDatarate \
 		--log-file "$explorer1applog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 
@@ -517,6 +524,7 @@ then
 		--dstadd $buoyAddr \
 		--data-rate $imgDatarate \
 		--log-file "$explorer2applog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 
@@ -536,6 +544,7 @@ then
 		--dstadd $buoyAddr \
 		--data-rate $imgDatarate \
 		--log-file "$explorer3applog" \
+		--devBitRate $devBitRate \
 		-l debug \
 		--ms-start 10000 &
 
@@ -582,11 +591,11 @@ else
 	supportapplog="$rawlogdir/support.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts0 \
+		--num-packets $controlNumPkts \
 		--node-name comms_support \
 		--add $supportAddr \
 		--dstadd $leaderAddr \
-		--data-rate $controlDatarate0 \
+		--data-rate $controlDatarate \
 		--log-file "$supportapplog" \
 		--ms-start 10000 &
 	support=$!
