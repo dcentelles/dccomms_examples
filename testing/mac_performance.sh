@@ -268,13 +268,14 @@ then
 	sleep 5
 	sed -i "s/packetslib/${library}/g" $scene
 else
-	tmplscene=$localscenesdir/netsim_twinbot_mac_4slaves.xml
+	#tmplscene=$localscenesdir/netsim_twinbot_mac_4slaves.xml
+	tmplscene=$localscenesdir/twinbot.xml
 	scene=$scenesdir/$protocol.xml
 	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
 fi
 
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
-sed -i "s/<logToFile>uwsimnet.log<\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
+sed -i "s/<logToFile><\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
 sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
 

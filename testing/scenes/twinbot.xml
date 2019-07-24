@@ -13,7 +13,7 @@
     <crestFoamHeight> 2.2 </crestFoamHeight>
     <oceanSurfaceHeight> 0 </oceanSurfaceHeight>
     <fog>
-      <density> 0.1 </density>
+      <density> 0.03 </density>
       <color>
         <r>0.017</r>
         <g>0.027</g>
@@ -26,9 +26,9 @@
       <b>0.079</b>
     </color>
     <attenuation>
-      <r>0.22</r>
-      <g>0.142 </g>
-      <b> 0.02 </b>
+      <r>0.19</r>
+      <g>0.139 </g>
+      <b> 0.009 </b>
     </attenuation>
   </oceanState>
   <simParams>
