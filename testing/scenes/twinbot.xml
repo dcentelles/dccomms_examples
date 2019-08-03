@@ -137,8 +137,8 @@
     <name>buoy</name>
     <file>data/scenes/buoy_v0.urdf</file>
     <position>
-      <x> 0</x>
-      <y> 0 </y>
+      <x> 3 </x>
+      <y> 3 </y>
       <z> 0.2 </z>
     </position>
     <orientation>

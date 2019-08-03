@@ -5,13 +5,15 @@ scriptPath=$(realpath $0)
 echo $scriptName
 pid=$$
 
+controlSize=20
+controlDatarate=32
+
 imgSize=$1
-controlSize=$2
-imgDatarate=$3
-controlDatarate=$4
-basedir=$(realpath ${5}/)
-imgNumPkts=$6
-protocol=$7
+imgDatarate=$2
+controlDatarateRf=$3
+basedir=$(realpath ${4}/)
+imgNumPkts=$5
+protocol=$6
 devDelay=2
 longLinkMaxRange=100
 shortLinkMaxRange=15
@@ -33,13 +35,14 @@ else
 	longLinkPropSpeed=1500
 fi
 
-controlDatarate0=$(echo "$controlDatarate/4" | bc)
-controlDatarate2=$(echo "$controlDatarate*2" | bc)
-
 imgDuration=$(echo "$imgNumPkts * $imgSize*8 / $imgDatarate" | bc -l)
-controlNumPkts0=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate0)" | bc)
-controlNumPkts=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate)" | bc)
-controlNumPkts2=$(echo "$imgDuration / ($controlSize * 8 / $controlDatarate2)" | bc)
+
+aux=$(echo "($controlSize * 8 / $controlDatarate)" | bc -l)
+controlNumPkts=$(echo "$imgDuration / $aux" | bc)
+
+aux=$(echo "($controlSize * 8 / $controlDatarateRf)" | bc -l)
+controlNumPktsRf=$(echo "$imgDuration / $aux" | bc)
+
 testduration=$(echo "$imgDuration + 30" | bc -l)
 
 basedir=$(realpath ${basedir}/)
@@ -390,7 +393,7 @@ then
 	followerapplog="$rawlogdir/follower.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts2 \
+		--num-packets $controlNumPktsRf \
 		--devDelay $devDelay \
 		--dcmac \
 		--maxnodes $shortLinkMaxNodes \
@@ -398,7 +401,7 @@ then
 		--node-name comms_follower \
 		--add $followerAddr \
 		--dstadd $leaderAddr \
-		--data-rate $controlDatarate2 \
+		--data-rate $controlDatarateRf \
 		--log-file "$followerapplog" \
 		--devBitRate $devBitRate \
 		-l debug \
@@ -410,7 +413,7 @@ then
 	leaderapplog="$rawlogdir/leader.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts2 \
+		--num-packets $controlNumPktsRf \
 		--devDelay $devDelay \
 		--dcmac \
 		--maxnodes $shortLinkMaxNodes \
@@ -418,7 +421,7 @@ then
 		--node-name comms_leader \
 		--add $leaderAddr \
 		--dstadd $followerAddr \
-		--data-rate $controlDatarate2 \
+		--data-rate $controlDatarateRf \
 		--log-file "$leaderapplog" \
 		--devBitRate $devBitRate \
 		-l debug \
@@ -453,7 +456,7 @@ then
 	buoyapplog="$rawlogdir/buoy.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts0 \
+		--num-packets $controlNumPkts \
 		--devDelay $devDelay \
 		--dcmac \
 		--maxnodes $longLinkMaxNodes \
@@ -463,7 +466,7 @@ then
 		--add $buoyAddr \
 		--node-name comms_buoy \
 		--dstadd $explorer0Addr \
-		--data-rate $controlDatarate0 \
+		--data-rate $controlDatarate \
 		--devBitRate $devBitRate \
 		--l debug \
 		--ms-start 10000 &
@@ -565,11 +568,11 @@ else
 	followerapplog="$rawlogdir/follower.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts2 \
+		--num-packets $controlNumPktsRf \
 		--node-name comms_follower \
 		--add $followerAddr \
 		--dstadd $leaderAddr \
-		--data-rate $controlDatarate2 \
+		--data-rate $controlDatarateRf \
 		--log-file "$followerapplog" \
 		--ms-start 10000 &
 	follower=$!
@@ -578,11 +581,11 @@ else
 	leaderapplog="$rawlogdir/leader.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts2 \
+		--num-packets $controlNumPktsRf \
 		--node-name comms_leader \
 		--add $leaderAddr \
 		--dstadd $followerAddr \
-		--data-rate $controlDatarate2 \
+		--data-rate $controlDatarateRf \
 		--log-file "$leaderapplog" \
 		--ms-start 10000 &
 	leader=$!
@@ -605,11 +608,11 @@ else
 	buoyapplog="$rawlogdir/buoy.log"
 	${bindir}/example4 \
 		--tx-packet-size $controlSize \
-		--num-packets $controlNumPkts0 \
+		--num-packets $controlNumPkts \
 		--node-name comms_buoy \
 		--add $buoyAddr \
 		--dstadd $explorer0Addr \
-		--data-rate $controlDatarate0 \
+		--data-rate $controlDatarate \
 		--log-file "$buoyapplog" \
 		--ms-start 10000 &
 	buoy=$!
