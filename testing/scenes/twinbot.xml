@@ -47,7 +47,7 @@
     </offsetr>
     <enablePhysics> 1 </enablePhysics>
     <showTrajectory>
-      <target>leader/gripper_finger_2</target>
+      <target>leader</target>
       <color>
         <r>0</r>
         <g>255</g>
@@ -55,13 +55,59 @@
       </color>
     </showTrajectory>
     <showTrajectory>
-      <target>follower/gripper_finger_2</target>
+      <target>follower</target>
       <color>
         <r>255</r>
         <g>0</g>
         <b>0</b>
       </color>
     </showTrajectory>
+    <showTrajectory>
+      <target>support</target>
+      <color>
+        <r>255</r>
+        <g>0</g>
+        <b>255</b>
+      </color>
+    </showTrajectory>
+    <showTrajectory>
+      <target>explorer0</target>
+      <color>
+        <r>0</r>
+        <g>255</g>
+        <b>255</b>
+      </color>
+    </showTrajectory>
+    <showTrajectory>
+      <target>explorer1</target>
+      <color>
+        <r>0</r>
+        <g>255</g>
+        <b>255</b>
+      </color>
+    </showTrajectory>
+    <showTrajectory>
+      <target>explorer2</target>
+      <color>
+        <r>0</r>
+        <g>255</g>
+        <b>255</b>
+      </color>
+    </showTrajectory>
+    <showTrajectory>
+      <target>explorer3</target>
+      <color>
+        <r>0</r>
+        <g>255</g>
+        <b>255</b>
+      </color>
+    </showTrajectory>
+
+
+
+
+
+
   </simParams>
   <camera>
     <freeMotion> 1 </freeMotion>

@@ -61,13 +61,11 @@ echo $* > $resultsdir/notes.txt
 echo "control pkt size: $controlSize" | tee -a $resultsdir/notes
 echo "image pkt size: $imgSize" | tee -a $resultsdir/notes
 echo "num. image pkts: $imgNumPkts" | tee -a $resultsdir/notes
-echo "num. control pkts 0: $controlNumPkts0" | tee -a $resultsdir/notes
-echo "num. control pkts 1: $controlNumPkts" | tee -a $resultsdir/notes
-echo "num. control pkts 2: $controlNumPkts2" | tee -a $resultsdir/notes
+echo "num. control pkts (op): $controlNumPkts" | tee -a $resultsdir/notes
+echo "num. control pkts (iauv): $controlNumPktsRf" | tee -a $resultsdir/notes
 echo "test duration: $testduration" | tee -a $resultsdir/notes
-echo "control datarate 0: $controlDatarate0" | tee -a $resultsdir/notes
-echo "control datarate 1: $controlDatarate" | tee -a $resultsdir/notes
-echo "control datarate 2: $controlDatarate2" | tee -a $resultsdir/notes
+echo "control datarate (op): $controlDatarate" | tee -a $resultsdir/notes
+echo "control datarate (iauv): $controlDatarateRf" | tee -a $resultsdir/notes
 echo "img datarate: $imgDatarate" | tee -a $resultsdir/notes
 echo "protocol: $protocol" | tee -a $resultsdir/notes
 echo "long link channel: $longLinkChannel" | tee -a $resultsdir/notes
@@ -283,6 +281,8 @@ scene=$scenesdir/$protocol.xml
 if [ "$protocol" == "nomac" ]
 then
 	tmplscene=$localscenesdir/twinbot.xml
+	pktbuilder="VariableLength2BPacketBuilder"
+	libpath=""
 	cp $tmplscene $scene
 else
 	tmplscene=$localscenesdir/twinbot.xml
