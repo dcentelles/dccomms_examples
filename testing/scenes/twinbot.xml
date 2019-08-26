@@ -13,7 +13,7 @@
     <crestFoamHeight> 2.2 </crestFoamHeight>
     <oceanSurfaceHeight> 0 </oceanSurfaceHeight>
     <fog>
-      <density> 0.03 </density>
+      <density> 0.1 </density>
       <color>
         <r>0.017</r>
         <g>0.027</g>
@@ -26,9 +26,9 @@
       <b>0.079</b>
     </color>
     <attenuation>
-      <r>0.19</r>
-      <g>0.139 </g>
-      <b> 0.009 </b>
+      <r>0.29</r> <!-- 0.19 , 0.139, 0.009 -->
+      <g>0.239 </g>
+      <b> 0.019 </b>
     </attenuation>
   </oceanState>
   <simParams>
@@ -46,6 +46,7 @@
       <z> -1.57 </z>
     </offsetr>
     <enablePhysics> 1 </enablePhysics>
+    <!--
     <showTrajectory>
       <target>leader</target>
       <color>
@@ -102,7 +103,7 @@
         <b>255</b>
       </color>
     </showTrajectory>
-
+    -->
 
 
 
@@ -323,22 +324,6 @@
 
       <logLevel>info</logLevel>
     </CustomCommsDevice>
-    <LedArray>
-      <name>support_leds</name>
-      <relativeTo>base_link</relativeTo>
-      <position>
-        <x>0.2</x>
-        <y>0</y>
-        <z>-0.05</z>
-      </position>
-      <orientation>
-        <r>0</r>
-        <p>0</p>
-        <y>0</y>
-      </orientation>
-      <radio>0.02</radio>
-      <space>0.30</space>
-    </LedArray>
   </vehicle>
 
   <!-- explorer 0 -->
@@ -694,23 +679,6 @@
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
-
-    <LedArray>
-      <name>leader_leds</name>
-      <relativeTo>base_link</relativeTo>
-      <position>
-        <x>0.2</x>
-        <y>0</y>
-        <z>-0.12</z>
-      </position>
-      <orientation>
-        <r>0</r>
-        <p>0</p>
-        <y>0</y>
-      </orientation>
-      <radio>0.02</radio>
-      <space>0.70</space>
-    </LedArray>
   </vehicle>
 
   <!-- FOLLOWER -->
@@ -797,23 +765,6 @@
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
-
-    <LedArray>
-      <name>follower_leds</name>
-      <relativeTo>base_link</relativeTo>
-      <position>
-        <x>0.2</x>
-        <y>0</y>
-        <z>-0.12</z>
-      </position>
-      <orientation>
-        <r>0</r>
-        <p>0</p>
-        <y>0</y>
-      </orientation>
-      <radio>0.02</radio>
-      <space>0.70</space>
-    </LedArray>
   </vehicle>
 
 <!--
