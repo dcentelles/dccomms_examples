@@ -1,6 +1,6 @@
 [submodule "modules/cxxopts"]
 	path = modules/cxxopts
 	url = https://github.com/jarro2783/cxxopts.git
-[submodule "modules/dccomms_utils"]
-	path = modules/dccomms_utils
-	url = https://github.com/dcentelles/dccomms_utils
+[submodule "modules/umci"]
+	path = modules/umci
+	url = https://github.com/dcentelles/umci.git

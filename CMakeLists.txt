@@ -144,41 +144,41 @@ add_definitions(-fPIC -std=c++11)
 SET(SRCPATH ${CMAKE_CURRENT_SOURCE_DIR}/src/)
 SET(${PROJECT_NAME}_INCLUDE_DIRS
     ${SRCPATH}/include
-    ${${DCCOMMS_UTILS_GIT}_INCLUDE_DIRS}
+    ${${UMCI_GIT}_INCLUDE_DIRS}
 )
 
 include_directories(
   ${${PROJECT_NAME}_INCLUDE_DIRS}
 )
 
-SET(${PROJECT_NAME}_PACKETS_CPP_FILES
-                        ${SRCPATH}/DcMac.cpp
-                        )
+#SET(${PROJECT_NAME}_PACKETS_CPP_FILES
+#                        ${SRCPATH}/DcMac.cpp
+#                        )
 
-add_library(${PROJECT_NAME}_packets SHARED ${${PROJECT_NAME}_PACKETS_CPP_FILES})
-target_link_libraries(${PROJECT_NAME}_packets ${DCCOMMS_GIT} cxxopts)
-target_include_directories(${PROJECT_NAME}_packets PUBLIC ${${PROJECT_NAME}_INCLUDE_DIRS})
+#add_library(${PROJECT_NAME}_packets SHARED ${${PROJECT_NAME}_PACKETS_CPP_FILES})
+#target_link_libraries(${PROJECT_NAME}_packets ${DCCOMMS_GIT} cxxopts)
+#target_include_directories(${PROJECT_NAME}_packets PUBLIC ${${PROJECT_NAME}_INCLUDE_DIRS})
 
 add_executable (example1 ${SRCPATH}main/example1.cpp)
-target_link_libraries(example1 ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(example1 ${UMCI_GIT} cxxopts)
 
 add_executable (example2 ${SRCPATH}main/example2.cpp)
-target_link_libraries(example2 ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(example2 ${UMCI_GIT} cxxopts)
 
 add_executable (example3 ${SRCPATH}main/example3.cpp)
-target_link_libraries(example3 ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(example3 ${UMCI_GIT} cxxopts)
 
 add_executable (example4 ${SRCPATH}main/example4.cpp)
-target_link_libraries(example4 ${DCCOMMS_UTILS_GIT} cxxopts ${PROJECT_NAME}_packets)
+target_link_libraries(example4 ${UMCI_GIT} cxxopts)
 
 add_executable (example5 ${SRCPATH}main/example5.cpp)
-target_link_libraries(example5 ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(example5 ${UMCI_GIT} cxxopts)
 
 add_executable (router-2 ${SRCPATH}main/router-2.cpp)
-target_link_libraries(router-2 ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(router-2 ${UMCI_GIT} cxxopts)
 
 add_executable (btp ${SRCPATH}main/btp.cpp)
-target_link_libraries(btp ${DCCOMMS_UTILS_GIT} cxxopts)
+target_link_libraries(btp ${UMCI_GIT} cxxopts)
 
 #install(TARGETS ${PROJECT_NAME} main
 #        LIBRARY DESTINATION "lib"

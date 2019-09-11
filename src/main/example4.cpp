@@ -2,7 +2,7 @@
 #include <cpputils/SignalManager.h>
 #include <cxxopts.hpp>
 #include <dccomms/dccomms.h>
-#include <dccomms_examples/DcMac.h>
+#include <umci/DcMac.h>
 #include <dccomms_packets/SimplePacket.h>
 #include <dccomms_packets/VariableLength2BPacket.h>
 #include <dccomms_packets/VariableLengthPacket.h>
@@ -20,7 +20,7 @@ using namespace dccomms;
 using namespace std;
 using namespace cpputils;
 using namespace dccomms_packets;
-using namespace dccomms_examples;
+using namespace umci;
 /*
 macLayer->SetDevBitRate(1800);
 macLayer->SetDevIntrinsicDelay(85.282906);
