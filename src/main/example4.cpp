@@ -2,11 +2,11 @@
 #include <cpputils/SignalManager.h>
 #include <cxxopts.hpp>
 #include <dccomms/dccomms.h>
-#include <umci/DcMac.h>
 #include <dccomms_packets/SimplePacket.h>
 #include <dccomms_packets/VariableLength2BPacket.h>
 #include <dccomms_packets/VariableLengthPacket.h>
 #include <iostream>
+#include <umci/DcMac.h>
 
 /*
  * This is a tool to study the communication link capabilities using the
@@ -225,12 +225,10 @@ int main(int argc, char **argv) {
     *pptr = digit++;
   }
   uint32_t totalPacketSize = txPacketSize + packetSizeOffset;
-  Ptr<StreamCommsDevice> node;
-  Ptr<CommsDeviceService> service;
-  Ptr<DcMac> macLayer;
+  Ptr<CommsDeviceService> node;
 
   if (dcmac) {
-    macLayer = CreateObject<DcMac>();
+    auto macLayer = CreateObject<DcMac>();
 
     // uint32_t syncSlotDur = std::ceil(5 / (1500 / 8.) * 1000);
     // uint32_t maxDataSlotDur = std::ceil(300 / (1500 / 8.) * 1000);
@@ -258,10 +256,9 @@ int main(int argc, char **argv) {
     macLayer->SetMode(mode);
     node = macLayer;
   } else {
-    service = CreateObject<CommsDeviceService>(rxpb);
-    service->SetBlockingTransmission(false);
-    service->SetCommsDeviceId(nodeName);
-    node = service;
+    node = CreateObject<CommsDeviceService>(rxpb);
+    node->SetBlockingTransmission(false);
+    node->SetCommsDeviceId(nodeName);
   }
 
   auto logFormatter =
@@ -287,11 +284,7 @@ int main(int argc, char **argv) {
   }
 
   node->SetLogLevel(logLevel);
-  if (dcmac) {
-    macLayer->Start();
-  } else {
-    service->Start();
-  }
+  node->Start();
 
   std::thread tx, rx;
 

@@ -282,12 +282,14 @@ sed -i "s/builderlibpath/${libpath}/g" $scene
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile><\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
 
-
+loglevel=""
 if [ "$debug" == "debug" ]
 then
 	echo "debug"
+	loglevel="debug"
 else
 	echo "no debug"
+	loglevel="info"
 	if [ "$debug" == "logdebug" ]
 	then
 		sed -i "s/>info</>debug</g" $scene
@@ -349,27 +351,27 @@ then
 
 	echo "tx0"
 	tx0applog="$rawlogdir/bluerov2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay  --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 10000 --propSpeed $propSpeed -l debug&
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay  --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
 	tx0=$!
 
 	echo "tx1"
 	tx1applog="$rawlogdir/bluerov2_f_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 10000 --propSpeed $propSpeed -l debug&
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
 	tx1=$!
 
 	echo "tx2"
 	tx2applog="$rawlogdir/bluerov2_f2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 10000 --propSpeed $propSpeed -l debug &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
 	tx2=$!
 
 	echo "tx3"
 	tx3applog="$rawlogdir/bluerov2_f3_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed $propSpeed -l debug&
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
 	tx3=$!
 
 	echo "base"
 	baseapplog="$rawlogdir/g500_s100.log"
-	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --devDelay $devDelay --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed $propSpeed -l debug & 
+	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --devDelay $devDelay --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed $propSpeed -l $loglevel & 
 	base=$!
 
 else
