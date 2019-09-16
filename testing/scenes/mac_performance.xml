@@ -74,7 +74,7 @@
   <netTracingScript>
     <className>ShipwreckNetSimTracing</className>
     <libPath>libuwsim_netsim_scripts.so</libPath>
-    <logToFile>uwsimnet.log</logToFile>
+    <logToFile></logToFile>
   </netTracingScript>
 
   <!--
@@ -195,10 +195,12 @@
         <errorRateExpr>0.0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
 
       <logLevel>info</logLevel>
@@ -280,10 +282,12 @@
         <errorRateExpr>0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -363,10 +367,12 @@
         <errorRateExpr>0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -447,10 +453,12 @@
         <errorRateExpr>0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -530,10 +538,12 @@
         <errorRateExpr>0</errorRateExpr>
       </rateErrorModel>
       <txPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </txPacketBuilder>
       <rxPacketBuilder>
-        <className>VariableLength2BPacketBuilder</className>
+        <className>packetbuilder</className>
+        builderlibpath
       </rxPacketBuilder>
       <logLevel>info</logLevel>
     </CustomCommsDevice>
@@ -562,6 +572,7 @@
       <collisionShapeType> trimesh </collisionShapeType>
     </physics>
   </object>
+
 
   <rosInterfaces>
 
@@ -611,6 +622,7 @@
       <topic>/uwsim/bluerov2_f/joint_state_command</topic>
       <vehicleName> bluerov2_f </vehicleName>
     </ROSJointStateToArm>
+    
     <ROSJointStateToArm>
       <topic>/uwsim/bluerov2_f2/joint_state_command</topic>
       <vehicleName> bluerov2_f2 </vehicleName>
@@ -619,6 +631,7 @@
       <topic>/uwsim/bluerov2_f3/joint_state_command</topic>
       <vehicleName> bluerov2_f3 </vehicleName>
     </ROSJointStateToArm>
+ 
     <VirtualCameraToROSImage>
       <cameraName>g500_camera</cameraName>
       <imageTopic> /g500/camera </imageTopic>
@@ -634,6 +647,7 @@
       <imageTopic> /bluerov2_f/camera </imageTopic>
       <infoTopic> /bluerov2_f/camera_info </infoTopic>
     </VirtualCameraToROSImage>
+  
      <VirtualCameraToROSImage>
       <cameraName>bluerov2_f2_camera</cameraName>
       <imageTopic> /bluerov2_f2/camera </imageTopic>
@@ -644,6 +658,7 @@
       <imageTopic> /bluerov2_f3/camera </imageTopic>
       <infoTopic> /bluerov2_f3/camera_info </infoTopic>
     </VirtualCameraToROSImage>
+    
 
     <ROSPoseToPAT>
       <topic> /g500/pose</topic>
@@ -657,6 +672,7 @@
       <topic> /bluerov2_f/pose </topic>
       <vehicleName> bluerov2_f </vehicleName>
     </ROSPoseToPAT>
+   
     <ROSPoseToPAT>
       <topic> /bluerov2_f2/pose </topic>
       <vehicleName> bluerov2_f2 </vehicleName>
@@ -665,6 +681,7 @@
       <topic> /bluerov2_f3/pose </topic>
       <vehicleName> bluerov2_f3 </vehicleName>
     </ROSPoseToPAT>
+
     <ROSPoseToPAT>
       <topic> /buoy1/pose </topic>
       <vehicleName> buoy0 </vehicleName>
@@ -684,6 +701,7 @@
       <topic>bluerov2_f/s100</topic>
       <rate>10</rate>
     </CustomCommsDeviceROS>
+   
     <CustomCommsDeviceROS>
       <name>bluerov2_f2_s100</name>
       <topic>bluerov2_f2/s100</topic>
@@ -694,6 +712,7 @@
       <topic>bluerov2_f3/s100</topic>
       <rate>10</rate>
     </CustomCommsDeviceROS>
+   
     <CustomCommsDeviceROS>
       <name>g500_s100</name>
       <topic>g500/s100</topic>

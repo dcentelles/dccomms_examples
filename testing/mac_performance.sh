@@ -11,7 +11,7 @@ npkts=$3
 testduration=$4
 protocol=$5
 propSpeed=$6
-devDelay=2
+devDelay=10
 echo "prop speed arg: $propSpeed"
 if [ "$propSpeed" == "ac" ]
 then
@@ -255,29 +255,32 @@ scenesdir=$(rospack find uwsim)/data/scenes
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
+tmplscene=$localscenesdir/mac_performance.xml
 if [ "$protocol" == "dcmac" ]
 then
-	tmplscene=$localscenesdir/netsim_twinbot_dcmac_4slaves.xml
 	scene=$scenesdir/$protocol.xml
 	cp $tmplscene $scene
+	cd ../modules/umci
 	gitrev=$(git rev-parse --short HEAD)
-	library=../build/libdccomms_examples_${gitrev}_packets.so
+	cd -
+	library=../build/modules/umci/libumci_${gitrev}.so
 	library=$(realpath ${library})
 	library=$(echo "$library" | sed 's/\//\\\//g')
 	echo $library
-	sleep 5
-	sed -i "s/packetslib/${library}/g" $scene
+	pktbuilder="DcMacPacketBuilder"
+	libpath="<libPath>$library<\/libPath>"
 else
-	#tmplscene=$localscenesdir/netsim_twinbot_mac_4slaves.xml
-	tmplscene=$localscenesdir/twinbot.xml
 	scene=$scenesdir/$protocol.xml
+	pktbuilder="VariableLength2BPacketBuilder"
 	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
+	libpath=""
 fi
 
+sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
+sed -i "s/packetbuilder/${pktbuilder}/g" $scene
+sed -i "s/builderlibpath/${libpath}/g" $scene
 uwsimlogpath=$(echo "$uwsimlog" | sed 's/\//\\\//g')
 sed -i "s/<logToFile><\/logToFile>/<logToFile>$uwsimlogpath<\/logToFile>/g" $scene
-
-sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
 
 
 if [ "$debug" == "debug" ]
