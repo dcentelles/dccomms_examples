@@ -219,7 +219,7 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> -6</x>
+      <x> 0</x>
       <y> 0 </y>
       <z> 13 </z>
     </position>
@@ -305,8 +305,8 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> 0</x>
-      <y> 6 </y>
+      <x> 20 </x>
+      <y> 0 </y>
       <z> 13 </z>
     </position>
     <orientation>
@@ -392,7 +392,7 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> 6 </x>
+      <x> 40 </x>
       <y> 0 </y>
       <z> 13 </z>
     </position>
@@ -478,8 +478,8 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> 0 </x>
-      <y> -6 </y>
+      <x> 60 </x>
+      <y> 0 </y>
       <z> 13 </z>
     </position>
     <orientation>
@@ -511,7 +511,7 @@
       <mac>4</mac>
       <macProtocol>
         <name></name>
-	    <maxBackoffSlots></maxBackoffSlots>
+        <maxBackoffSlots></maxBackoffSlots>
       </macProtocol>
       <bitrate>1800</bitrate>
       <txFifoSize>500</txFifoSize>

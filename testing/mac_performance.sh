@@ -11,7 +11,9 @@ npkts=$3
 testduration=$4
 protocol=$5
 propSpeed=$6
-devDelay=10
+devDelay=2
+maxRange=100
+
 echo "prop speed arg: $propSpeed"
 if [ "$propSpeed" == "ac" ]
 then
@@ -31,6 +33,8 @@ echo "prop speed: $propSpeed"
 
 basedir=$(realpath ${7}/)
 debug=$8
+scene=$9
+maxBackoffSlots=${10}
 
 echo "BASEDIR: $basedir"
 bindir="../build/" #TODO: as argument
@@ -42,10 +46,13 @@ if [ "$debug" == "debug" ]
 then
 	echo "debug"
 else
+if [ "$debug" == "nodebug" ]
+then
 	echo "no debug"
-	rm -rf /dev/mqueue/*
+fi
 fi
 
+rm -rf /dev/mqueue/*
 mkdir -p $resultsdir
 mkdir -p $rawlogdir
 
@@ -255,7 +262,8 @@ scenesdir=$(rospack find uwsim)/data/scenes
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
-tmplscene=$localscenesdir/mac_performance.xml
+tmplscene=$localscenesdir/$scene.xml
+echo "TMPL SCENE: $tmplscene"
 if [ "$protocol" == "dcmac" ]
 then
 	scene=$scenesdir/$protocol.xml
@@ -276,6 +284,8 @@ else
 	libpath=""
 fi
 
+sed -i "s/<maxDistance>15<\/maxDistance>/<maxDistance>$maxRange<\/maxDistance>/g" $scene
+sed -i "s/<maxBackoffSlots><\/maxBackoffSlots>/<maxBackoffSlots>$maxBackoffSlots<\/maxBackoffSlots>/g" $scene
 sed -i "s/propSpeedValue/${uwsimPropSpeed}/g" $scene
 sed -i "s/packetbuilder/${pktbuilder}/g" $scene
 sed -i "s/builderlibpath/${libpath}/g" $scene
@@ -351,27 +361,27 @@ then
 
 	echo "tx0"
 	tx0applog="$rawlogdir/bluerov2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay  --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay  --node-name bluerov2_s100 --dcmac --add 1 --dstadd 0 --data-rate $datarate --log-file "$tx0applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel --maxRange $maxRange &
 	tx0=$!
 
 	echo "tx1"
 	tx1applog="$rawlogdir/bluerov2_f_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f_s100 --dcmac --add 2 --dstadd 0 --data-rate $datarate --log-file "$tx1applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel --maxRange $maxRange &
 	tx1=$!
 
 	echo "tx2"
 	tx2applog="$rawlogdir/bluerov2_f2_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f2_s100 --dcmac --add 3 --dstadd 0 --data-rate $datarate --log-file "$tx2applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel --maxRange $maxRange &
 	tx2=$!
 
 	echo "tx3"
 	tx3applog="$rawlogdir/bluerov2_f3_s100.log"
-	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel &
+	${bindir}/example4 --tx-packet-size $size --num-packets $npkts --devDelay $devDelay --node-name bluerov2_f3_s100 --dcmac --add 4 --dstadd 0 --data-rate $datarate --log-file "$tx3applog" --ms-start 10000 --propSpeed $propSpeed -l $loglevel --maxRange $maxRange &
 	tx3=$!
 
 	echo "base"
 	baseapplog="$rawlogdir/g500_s100.log"
-	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --devDelay $devDelay --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed $propSpeed -l $loglevel & 
+	${bindir}/example4 --tx-packet-size $mpktsize --num-packets $mnpkts --devDelay $devDelay --node-name g500_s100 --dcmac --master --add 0 --dstadd 1 --data-rate $mdatarate --log-file "$baseapplog" --ms-start 0 --propSpeed $propSpeed -l $loglevel --maxRange $maxRange & 
 	base=$!
 
 else
