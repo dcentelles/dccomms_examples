@@ -304,7 +304,7 @@ int main(int argc, char **argv) {
     uint8_t *trunkseqPtr = txPacket->GetPayloadBuffer();
     uint32_t imgSize = txPacketSize * 2;
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
-      uint64_t nanos = round(totalPacketSize * nanosPerByte);
+      uint64_t nanos = round(imgSize * nanosPerByte);
       txPacket->SetSeq(npacket);
       txPacket->SetDestAddr(dstadd);
       *trunkseqPtr = 0;
