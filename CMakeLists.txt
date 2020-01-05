@@ -171,6 +171,9 @@ target_link_libraries(example3 ${UMCI_GIT} cxxopts)
 add_executable (example4 ${SRCPATH}main/example4.cpp)
 target_link_libraries(example4 ${UMCI_GIT} cxxopts)
 
+add_executable (transport ${SRCPATH}main/transport.cpp)
+target_link_libraries(transport ${UMCI_GIT} cxxopts)
+
 add_executable (example5 ${SRCPATH}main/example5.cpp)
 target_link_libraries(example5 ${UMCI_GIT} cxxopts)
 
