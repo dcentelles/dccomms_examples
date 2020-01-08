@@ -30,8 +30,8 @@ macLayer->SetPropSpeed(3e8);
 int main(int argc, char **argv) {
   std::string logFile, logLevelStr = "info", nodeName;
   uint32_t dataRate = 200, txPacketSize = 20, rxPacketSize = 20, nPackets = 0,
-           add = 1, dstadd = 2, packetSizeOffset = 0, dcmacMaxNodes = 4,
-           devBitRate = 1800;
+           nTrunks = 2, add = 1, dstadd = 2, packetSizeOffset = 0,
+           dcmacMaxNodes = 4, devBitRate = 1800;
   double devIntrinsicDelay = 0, maxDistance = 15, propSpeed = 3e8;
   uint64_t msStart = 0;
   enum PktType { DLF = 0, VL = 1, SP = 2, VL2 = 3 };
@@ -83,48 +83,55 @@ int main(int argc, char **argv) {
         "num-packets",
         std::string("number of packets to transmit (default: ") +
             std::to_string(nPackets) + ")",
-        cxxopts::value<uint32_t>(nPackets))(
-        "ms-start",
-        std::string("It will begin to transmit num-packets packets after "
-                    "ms-start millis (default: ") +
-            std::to_string(msStart) + ")",
-        cxxopts::value<uint64_t>(msStart))(
-        "tx-packet-size",
-        std::string("transmitted packet size in bytes (overhead + payload) "
-                    "(default: ") +
-            std::to_string(txPacketSize) + ")",
-        cxxopts::value<uint32_t>(txPacketSize))(
-        "rx-packet-size",
-        std::string("received packet size in bytes (overhead + payload). Only "
-                    "needed if "
-                    "packet type is 1 (default: ") +
-            std::to_string(rxPacketSize) + ")",
-        cxxopts::value<uint32_t>(rxPacketSize))(
-        "data-rate",
-        std::string("application data rate in bps. A high value could saturate "
-                    "the output "
-                    "buffer (default: ") +
-            std::to_string(dataRate) + ")",
-        cxxopts::value<uint32_t>(dataRate))(
-        "packet-size-offset",
-        std::string("packet size offset in bytes (default: ") +
-            std::to_string(packetSizeOffset) + ")",
-        cxxopts::value<uint32_t>(packetSizeOffset))(
-        "disable-rx",
-        std::string("disable packets reception (default: ") +
-            (disableRx ? "true" : "false") + ")",
-        cxxopts::value<bool>(disableRx))("dcmac", "(DcMac) adds a DcMAC layer",
-                                         cxxopts::value<bool>(dcmac))(
-        "master",
-        std::string("(DcMac) set DcMac mode to master (default: ") +
-            (dcmacmaster ? "master" : "slave") + ")",
-        cxxopts::value<bool>(dcmacmaster))(
-        "maxnodes",
-        std::string("(DcMac) set DcMac max. num of nodes (default: ") +
-            std::to_string(dcmacMaxNodes) + ")",
-        cxxopts::value<uint32_t>(dcmacMaxNodes))(
-        "node-name", "dccomms id",
-        cxxopts::value<std::string>(nodeName)->default_value("node0"));
+        cxxopts::value<uint32_t>(nPackets))
+
+        ("num-trunks",
+         std::string("number of trunks to transmit (default: ") +
+             std::to_string(nTrunks) + ")",
+         cxxopts::value<uint32_t>(nTrunks))(
+            "ms-start",
+            std::string("It will begin to transmit num-packets packets after "
+                        "ms-start millis (default: ") +
+                std::to_string(msStart) + ")",
+            cxxopts::value<uint64_t>(msStart))(
+            "tx-packet-size",
+            std::string("transmitted packet size in bytes (overhead + payload) "
+                        "(default: ") +
+                std::to_string(txPacketSize) + ")",
+            cxxopts::value<uint32_t>(txPacketSize))(
+            "rx-packet-size",
+            std::string(
+                "received packet size in bytes (overhead + payload). Only "
+                "needed if "
+                "packet type is 1 (default: ") +
+                std::to_string(rxPacketSize) + ")",
+            cxxopts::value<uint32_t>(rxPacketSize))(
+            "data-rate",
+            std::string(
+                "application data rate in bps. A high value could saturate "
+                "the output "
+                "buffer (default: ") +
+                std::to_string(dataRate) + ")",
+            cxxopts::value<uint32_t>(dataRate))(
+            "packet-size-offset",
+            std::string("packet size offset in bytes (default: ") +
+                std::to_string(packetSizeOffset) + ")",
+            cxxopts::value<uint32_t>(packetSizeOffset))(
+            "disable-rx",
+            std::string("disable packets reception (default: ") +
+                (disableRx ? "true" : "false") + ")",
+            cxxopts::value<bool>(disableRx))(
+            "dcmac", "(DcMac) adds a DcMAC layer", cxxopts::value<bool>(dcmac))(
+            "master",
+            std::string("(DcMac) set DcMac mode to master (default: ") +
+                (dcmacmaster ? "master" : "slave") + ")",
+            cxxopts::value<bool>(dcmacmaster))(
+            "maxnodes",
+            std::string("(DcMac) set DcMac max. num of nodes (default: ") +
+                std::to_string(dcmacMaxNodes) + ")",
+            cxxopts::value<uint32_t>(dcmacMaxNodes))(
+            "node-name", "dccomms id",
+            cxxopts::value<std::string>(nodeName)->default_value("node0"));
 
     auto result = options.parse(argc, argv);
     if (result.count("help")) {
@@ -141,7 +148,7 @@ int main(int argc, char **argv) {
   PacketBuilderPtr rxpb, txpb;
   Ptr<Packet> txPacket;
   uint32_t payloadSize;
-  txPacketSize = txPacketSize / 2;
+  txPacketSize = txPacketSize / nTrunks;
   switch (txPktType) {
   case DLF: {
     auto checksumType = DataLinkFrame::fcsType::crc16;
@@ -216,15 +223,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  uint8_t *dstPtr = txPacket->GetPayloadBuffer();
-  uint16_t *seqPtr = (uint16_t *)(dstPtr + 1);
-  uint8_t *asciiMsg = (uint8_t *)(seqPtr + 1);
-  uint32_t msgSize = payloadSize - 2;
-  uint8_t *maxPtr = asciiMsg + msgSize;
-  char digit = '0';
-  for (uint8_t *pptr = asciiMsg; pptr < maxPtr; pptr++) {
-    *pptr = digit++;
-  }
   uint32_t totalPacketSize = txPacketSize + packetSizeOffset;
   Ptr<CommsDeviceService> node;
 
@@ -293,26 +291,25 @@ int main(int argc, char **argv) {
   double nanosPerByte = 1e9 / bytesPerSecond;
   log->Info("data rate (bps) = {} ; packet size = {} (+offset = {}) ; num. "
             "packets = {} ; "
-            "bytes/second = {}\nnanos/byte = {}",
+            "bytes/second = {}\nnanos/byte = {}  Num. Trunks = {}",
             dataRate, txPacketSize, totalPacketSize, nPackets, bytesPerSecond,
-            nanosPerByte);
-
-  tx = std::thread([totalPacketSize, node, seqPtr, dstPtr, dstadd, txPacket,
-                    log, nPackets, txPacketSize, nanosPerByte, msStart, msgSize,
-                    payloadSize]() {
+            nanosPerByte, nTrunks);
+  int lastcseq = nTrunks - 1;
+  tx = std::thread([&]() {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     uint8_t *trunkseqPtr = txPacket->GetPayloadBuffer();
-    uint32_t imgSize = txPacketSize * 2;
+    uint32_t imgSize = txPacketSize * nTrunks, cseq;
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       uint64_t nanos = round(imgSize * nanosPerByte);
       txPacket->SetSeq(npacket);
+      cseq = 0;
       txPacket->SetDestAddr(dstadd);
-      *trunkseqPtr = 0;
-      txPacket->PayloadUpdated(payloadSize);
-      node << txPacket;
-      *trunkseqPtr = 1;
-      txPacket->PayloadUpdated(payloadSize);
-      node << txPacket;
+      while (cseq <= lastcseq) {
+        *trunkseqPtr = cseq;
+        txPacket->PayloadUpdated(payloadSize);
+        node << txPacket;
+        cseq++;
+      }
       log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket, imgSize);
       std::this_thread::sleep_for(chrono::nanoseconds(nanos));
     }
@@ -336,11 +333,11 @@ int main(int argc, char **argv) {
           srcAddr = dlf->GetSrcAddr();
           cseq = currentSeqs[srcAddr];
           if (cseq == *trunkseq) {
-            if (cseq == 0) {
-              currentSeqs[srcAddr] = 1;
+            if (cseq < lastcseq) {
+              currentSeqs[srcAddr] = cseq + 1;
             } else {
               log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrcAddr(), seq,
-                        dlf->GetPacketSize() * 2);
+                        dlf->GetPacketSize() * nTrunks);
               currentSeqs[srcAddr] = 0;
             }
           } else {
