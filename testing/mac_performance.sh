@@ -258,11 +258,13 @@ kill -9 $sim > /dev/null 2> /dev/null
 sleep 5s
 
 localscenesdir=./scenes/
-scenesdir=$(rospack find uwsim)/data/scenes
+scenesdir=$localscenesdir
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
-tmplscene=$localscenesdir/$scene.xml
+tmpdir=$localscenesdir/tmp
+mkdir -p $tmpdir
+tmplscene=$tmpdir/$scene.xml
 echo "TMPL SCENE: $tmplscene"
 if [ "$protocol" == "dcmac" ]
 then
