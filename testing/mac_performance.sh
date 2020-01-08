@@ -264,6 +264,7 @@ uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
 tmpdir=$localscenesdir/tmp
 mkdir -p $tmpdir
+cp $localscenesdir/UWSimScene.dtd $tmpdir
 tmplscene=$localscenesdir/$scene.xml
 echo "TMPL SCENE: $tmplscene"
 if [ "$protocol" == "dcmac" ]
