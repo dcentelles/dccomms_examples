@@ -264,11 +264,11 @@ uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
 tmpdir=$localscenesdir/tmp
 mkdir -p $tmpdir
-tmplscene=$tmpdir/$scene.xml
+tmplscene=$localscenesdir/$scene.xml
 echo "TMPL SCENE: $tmplscene"
 if [ "$protocol" == "dcmac" ]
 then
-	scene=$scenesdir/$protocol.xml
+	scene=$tmpdir/$protocol.xml
 	cp $tmplscene $scene
 	cd ../modules/umci
 	gitrev=$(git rev-parse --short HEAD)
