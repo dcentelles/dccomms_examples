@@ -268,10 +268,10 @@ mkdir -p $tmpdir
 cp $localscenesdir/UWSimScene.dtd $tmpdir
 tmplscene=$localscenesdir/$scene.xml
 echo "TMPL SCENE: $tmplscene"
+scene=$tmpdir/$protocol.xml
+cp $tmplscene $scene
 if [ "$protocol" == "dcmac" ]
 then
-	scene=$tmpdir/$protocol.xml
-	cp $tmplscene $scene
 	cd ../modules/umci
 	gitrev=$(git rev-parse --short HEAD)
 	cd -
@@ -282,7 +282,6 @@ then
 	pktbuilder="DcMacPacketBuilder"
 	libpath="<libPath>$library<\/libPath>"
 else
-	scene=$scenesdir/$protocol.xml
 	pktbuilder="VariableLength2BPacketBuilder"
 	sed "s/<name><\/name>/<name>$protocol<\/name>/g" $tmplscene > $scene
 	libpath=""
