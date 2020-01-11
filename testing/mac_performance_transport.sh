@@ -46,14 +46,13 @@ rm -rf $resultsdir $rawlogdir
 if [ "$debug" == "debug" ]
 then
 	echo "debug"
+	sleeptime=3
 else
-if [ "$debug" == "nodebug" ]
-then
+	rm -rf /dev/mqueue/*
+	sleeptime=40
 	echo "no debug"
 fi
-fi
 
-rm -rf /dev/mqueue/*
 mkdir -p $resultsdir
 mkdir -p $rawlogdir
 
@@ -258,18 +257,20 @@ kill -9 $sim > /dev/null 2> /dev/null
 
 sleep 5s
 
-localscenesdir=./scenes/
-scenesdir=$localscenesdir
 uwsimlog=$(realpath $basedir/uwsimnet.log)
 uwsimlograw=$(realpath $basedir/uwsim.log.raw)
 
+localscenesdir=$(dirname $scriptPath)/scenes
+tmplscene=$localscenesdir/$scene.xml
+
 tmpdir=$localscenesdir/tmp
 mkdir -p $tmpdir
-cp $localscenesdir/UWSimScene.dtd $tmpdir
-tmplscene=$localscenesdir/$scene.xml
-echo "TMPL SCENE: $tmplscene"
 scene=$tmpdir/$protocol.xml
+
+cp $localscenesdir/UWSimScene.dtd $tmpdir
 cp $tmplscene $scene
+
+echo "TMPL SCENE: $scene"
 if [ "$protocol" == "dcmac" ]
 then
 	cd ../modules/umci
@@ -351,7 +352,7 @@ echo "ROSRUN: $rosrunproc ; SIM: $sim"
 
 echo $rosrunproc > rosrunpid
 echo $sim > simpid
-sleep 40s
+sleep ${sleeptime}s
 
 mnpkts=0
 mpktsize=20

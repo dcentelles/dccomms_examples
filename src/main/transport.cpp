@@ -341,7 +341,7 @@ int main(int argc, char **argv) {
               currentSeqs[srcAddr] = 0;
             }
           } else {
-            log->Warn("SEQERR {}", trunkseq);
+            log->Warn("SEQERR {}", *trunkseq);
           }
         } else
           log->Warn("ERR");
