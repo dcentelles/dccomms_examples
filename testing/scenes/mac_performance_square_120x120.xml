@@ -219,8 +219,8 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> 80 </x>
-      <y> 80 </y>
+      <x> 60 </x>
+      <y> 60 </y>
       <z> 13 </z>
     </position>
     <orientation>
@@ -305,8 +305,8 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> -80 </x>
-      <y> 80 </y>
+      <x> -60 </x>
+      <y> 60 </y>
       <z> 13 </z>
     </position>
     <orientation>
@@ -392,8 +392,8 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> -80 </x>
-      <y> -80 </y>
+      <x> -60 </x>
+      <y> -60 </y>
       <z> 13 </z>
     </position>
     <orientation>
@@ -478,8 +478,8 @@
       <joint> 0.5 </joint>
     </jointValues>
     <position>
-      <x> 80 </x>
-      <y> -80 </y>
+      <x> 60 </x>
+      <y> -60 </y>
       <z> 13 </z>
     </position>
     <orientation>

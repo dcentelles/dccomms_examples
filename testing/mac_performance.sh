@@ -36,23 +36,24 @@ debug=$8
 scene=$9
 maxBackoffSlots=${10}
 
+
 echo "BASEDIR: $basedir"
 bindir="../build/" #TODO: as argument
 resultsdir=$basedir/results
 rawlogdir=$basedir/rawlog
 
-rm -rf $resultsdir $rawlogdir
-if [ "$debug" == "debug" ]
-then
-	echo "debug"
-else
-if [ "$debug" == "nodebug" ]
-then
-	echo "no debug"
-fi
-fi
-
 rm -rf /dev/mqueue/*
+rm -rf $resultsdir $rawlogdir
+#if [ "$debug" == "debug" ]
+#then
+#	echo "debug"
+#	sleeptime=3
+#else
+#	rm -rf /dev/mqueue/*
+#	sleeptime=40
+#	echo "no debug"
+#fi
+
 mkdir -p $resultsdir
 mkdir -p $rawlogdir
 
@@ -351,7 +352,7 @@ echo "ROSRUN: $rosrunproc ; SIM: $sim"
 
 echo $rosrunproc > rosrunpid
 echo $sim > simpid
-sleep 40s
+sleep 100s
 
 mnpkts=0
 mpktsize=20
