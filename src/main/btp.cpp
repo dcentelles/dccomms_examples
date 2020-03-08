@@ -94,8 +94,8 @@ typedef uint16_t btpFlagsFieldType;
 class BtpPacket : public VariableLengthPacket {
 public:
   BtpPacket();
-  void SetDst(uint8_t add);
-  void SetSrc(uint8_t add);
+  void SetBtpDst(uint8_t add);
+  void SetBtpSrc(uint8_t add);
   void SetEt(const btpField &t);
   void SetRt(const btpField &r);
   void SetBtpSeq(const uint16_t &seq);
@@ -103,8 +103,8 @@ public:
 
   void UpdateSeq();
 
-  uint8_t GetDst();
-  uint8_t GetSrc();
+  uint8_t GetBtpDst();
+  uint8_t GetBtpSrc();
   btpField GetEt();
   btpField GetRt();
   uint16_t GetBtpSeq();
@@ -150,13 +150,13 @@ BtpPacket::BtpPacket() {
 void BtpPacket::SetState(const BtpState &state) { *_state = state; }
 BtpState BtpPacket::GetState() { return static_cast<BtpState>(*_state); }
 
-void BtpPacket::SetDst(uint8_t add) { *_add = (*_add & 0xf0) | (add & 0xf); }
-uint8_t BtpPacket::GetDst() { return *_add & 0xf; }
+void BtpPacket::SetBtpDst(uint8_t add) { *_add = (*_add & 0xf0) | (add & 0xf); }
+uint8_t BtpPacket::GetBtpDst() { return *_add & 0xf; }
 
-void BtpPacket::SetSrc(uint8_t add) {
+void BtpPacket::SetBtpSrc(uint8_t add) {
   *_add = (*_add & 0xf) | ((add & 0xf) << 4);
 }
-uint8_t BtpPacket::GetSrc() { return (*_add & 0xf0) >> 4; }
+uint8_t BtpPacket::GetBtpSrc() { return (*_add & 0xf0) >> 4; }
 
 void BtpPacket::SetEt(const btpField &t) { *_et = t; }
 void BtpPacket::SetRt(const btpField &r) { *_rt = r; }
@@ -916,7 +916,7 @@ void Btp::RunRx() {
   BtpPacketPtr pkt = CreateObject<BtpPacket>();
   while (1) {
     _rxDev >> pkt;
-    if (pkt->PacketIsOk()) {
+    if (pkt->IsOk()) {
       npkts += 1;
       ProcessRxPacket(pkt);
     }

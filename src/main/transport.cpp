@@ -157,8 +157,8 @@ int main(int argc, char **argv) {
     txPacket->PayloadUpdated(0);
     auto emptyPacketSize = txPacket->GetPacketSize();
     payloadSize = txPacketSize - emptyPacketSize;
-    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetSrcAddr(add);
-    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDestAddr(dstadd);
+    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetSrc(add);
+    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDst(dstadd);
     break;
   }
   case VL: {
@@ -198,8 +198,8 @@ int main(int argc, char **argv) {
     rxPacket->PayloadUpdated(0);
     auto emptyPacketSize = rxPacket->GetPacketSize();
     payloadSize = rxPacketSize - emptyPacketSize;
-    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetSrcAddr(add);
-    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetDestAddr(dstadd);
+    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetSrc(add);
+    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetDst(dstadd);
     break;
   }
   case VL: {
@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
       uint64_t nanos = round(imgSize * nanosPerByte);
       txPacket->SetSeq(npacket);
       cseq = 0;
-      txPacket->SetDestAddr(dstadd);
+      txPacket->SetDst(dstadd);
       while (cseq <= lastcseq) {
         *trunkseqPtr = cseq;
         txPacket->PayloadUpdated(payloadSize);
@@ -328,15 +328,15 @@ int main(int argc, char **argv) {
       uint32_t seq;
       while (true) {
         node >> dlf;
-        if (dlf->PacketIsOk()) {
+        if (dlf->IsOk()) {
           seq = dlf->GetSeq();
-          srcAddr = dlf->GetSrcAddr();
+          srcAddr = dlf->GetSrc();
           cseq = currentSeqs[srcAddr];
           if (cseq == *trunkseq) {
             if (cseq < lastcseq) {
               currentSeqs[srcAddr] = cseq + 1;
             } else {
-              log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrcAddr(), seq,
+              log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrc(), seq,
                         dlf->GetPacketSize() * nTrunks);
               currentSeqs[srcAddr] = 0;
             }

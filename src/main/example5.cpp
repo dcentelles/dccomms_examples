@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
     PacketPtr dlf = pb->Create();
     while (true) {
       node >> dlf;
-      if (dlf->PacketIsOk()) {
+      if (dlf->IsOk()) {
         write(1, dlf->GetPayloadBuffer(), dlf->GetPayloadSize());
       }
     }

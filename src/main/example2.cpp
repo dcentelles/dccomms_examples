@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
       PacketPtr dlf = pb->Create();
       while (true) {
         rxnode >> dlf;
-        if (dlf->PacketIsOk()) {
+        if (dlf->IsOk()) {
           uint16_t *seqPtr = (uint16_t *)dlf->GetPayloadBuffer();
           rxLog->Info("RX SEQ {} SIZE {}", *seqPtr,
                       dlf->GetPacketSize());

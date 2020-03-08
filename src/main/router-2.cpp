@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     PacketPtr packet = pb->Create();
     while (true) {
       dev0 >> packet;
-      if (packet->PacketIsOk()) {
+      if (packet->IsOk()) {
         uint8_t *dstPtr = packet->GetPayloadBuffer();
         uint8_t src = (*dstPtr & 0xf0) >> 4;
         uint8_t dst = *dstPtr & 0xf;
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
     PacketPtr packet = pb->Create();
     while (true) {
       dev1 >> packet;
-      if (packet->PacketIsOk()) {
+      if (packet->IsOk()) {
         uint8_t *dstPtr = packet->GetPayloadBuffer();
         uint8_t src = (*dstPtr & 0xf0) >> 4;
         uint8_t dst = *dstPtr & 0xf;

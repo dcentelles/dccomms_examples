@@ -149,8 +149,8 @@ int main(int argc, char **argv) {
     txPacket->PayloadUpdated(0);
     auto emptyPacketSize = txPacket->GetPacketSize();
     payloadSize = txPacketSize - emptyPacketSize;
-    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetSrcAddr(add);
-    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDestAddr(dstadd);
+    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetSrc(add);
+    std::static_pointer_cast<DataLinkFrame>(txPacket)->SetDst(dstadd);
     break;
   }
   case VL: {
@@ -190,8 +190,8 @@ int main(int argc, char **argv) {
     rxPacket->PayloadUpdated(0);
     auto emptyPacketSize = rxPacket->GetPacketSize();
     payloadSize = rxPacketSize - emptyPacketSize;
-    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetSrcAddr(add);
-    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetDestAddr(dstadd);
+    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetSrc(add);
+    std::static_pointer_cast<DataLinkFrame>(rxPacket)->SetDst(dstadd);
     break;
   }
   case VL: {
@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
     std::this_thread::sleep_for(chrono::milliseconds(msStart));
     for (uint32_t npacket = 0; npacket < nPackets; npacket++) {
       txPacket->SetSeq(npacket);
-      txPacket->SetDestAddr(dstadd);
+      txPacket->SetDst(dstadd);
       txPacket->PayloadUpdated(payloadSize);
       uint64_t nanos = round(totalPacketSize * nanosPerByte);
       log->Info("TX TO {} SEQ {} SIZE {}", dstadd, npacket,
@@ -317,9 +317,9 @@ int main(int argc, char **argv) {
       PacketPtr dlf = rxpb->Create();
       while (true) {
         node >> dlf;
-        if (dlf->PacketIsOk()) {
+        if (dlf->IsOk()) {
           uint32_t seq = dlf->GetSeq();
-          log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrcAddr(), seq,
+          log->Info("RX FROM {} SEQ {} SIZE {}", dlf->GetSrc(), seq,
                     dlf->GetPacketSize());
         } else
           log->Warn("ERR");
